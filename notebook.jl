@@ -128,7 +128,7 @@ grad(w)
 .Treant > .node {
 	padding: 3px; border: 1px solid #484848; border-radius: 3px;
 	box-sizing: unset;
- 	background-color: var(--main-bg-color);
+	background-color: var(--main-bg-color);
 	width: 200px,
 }
 
@@ -159,8 +159,8 @@ function show_tree(x; height=400)
 	<div id="$id" style="width:100%; height: $(height)px"> </div>
 	<script>
 	var simple_chart_config = {
-	    chart: {
-	        container: "#$id",
+		chart: {
+			container: "#$id",
 
             animateOnInit: true,
             
@@ -174,8 +174,7 @@ function show_tree(x; height=400)
 			connectors: {
 				type: "straight",
 				style: {
-					stroke: getComputedStyle(document.documentElement)
-    .getPropertyValue('--cm-editor-text-color')
+					stroke: getComputedStyle(document.documentElement).getPropertyValue('--cm-editor-text-color')
 				}
 			},
             animation: {
@@ -184,9 +183,9 @@ function show_tree(x; height=400)
                 connectorsAnimation: "bounce",
                 connectorsSpeed: 500
             }
-	    },
-	    
-	    nodeStructure: $(to_json(x))
+		},
+		
+		nodeStructure: $(to_json(x))
 	};
 	var my_chart = new Treant(simple_chart_config);
 	</script>
