@@ -162,12 +162,12 @@ function show_tree(x; height=400)
 		chart: {
 			container: "#$id",
 
-            animateOnInit: true,
-            
-            node: {
-                collapsable: true,
+			animateOnInit: true,
+
+			node: {
+				collapsable: true,
 				style: {width: "500px"}
-            },
+			},
 
 			nodeAlign: "BOTTOM",
 
@@ -177,14 +177,14 @@ function show_tree(x; height=400)
 					stroke: getComputedStyle(document.documentElement).getPropertyValue('--cm-editor-text-color')
 				}
 			},
-            animation: {
-                nodeAnimation: "easeOutBounce",
-                nodeSpeed: 500,
-                connectorsAnimation: "bounce",
-                connectorsSpeed: 500
-            }
+			animation: {
+				nodeAnimation: "easeOutBounce",
+				nodeSpeed: 500,
+				connectorsAnimation: "bounce",
+				connectorsSpeed: 500
+			}
 		},
-		
+
 		nodeStructure: $(to_json(x))
 	};
 	var my_chart = new Treant(simple_chart_config);
