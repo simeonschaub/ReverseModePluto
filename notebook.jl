@@ -5,7 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ d5559dba-9fe4-11ec-3744-ebd1408e7dc4
-using LegibleLambdas, AbstractTrees, PlutoUI, HypertextLiteral
+using LegibleLambdas, AbstractTrees, PlutoUI, HypertextLiteral, PlutoTest
 
 # ╔═╡ 99b6ab91-a022-449c-988c-0e5c5719c910
 begin
@@ -116,7 +116,7 @@ grad(y)
 y
 
 # ╔═╡ 18b1c55d-a6b5-44f6-b0b3-50bdb0aa9d96
-w = x*y + 4(x - 1)^2
+w = x*y + x
 
 # ╔═╡ 506d408e-dc2b-4e12-b917-286e3f4079a2
 grad(w)
@@ -198,8 +198,34 @@ show_tree(w)
 # ╔═╡ ff78f53f-1ad6-4a05-9e38-0926223ed7a6
 show_tree(:(3y + 2(x-1)))
 
-# ╔═╡ 0e2d1994-36d0-4a79-b8d7-29e157c4ef2b
+# ╔═╡ f6ce8448-d9ce-4453-9e47-dc6443d50f55
+html"""
+<style>
+p-frame-viewer {
+	display: inline-flex;
+	flex-direction: column;
+}
+p-frames,
+p-frame-controls {
+	display: inline-flex;
+}
+p-frame-controls {
+	margin-top: 20px;
+}
+line-like {
+	font-size: 30px;
+}
+"""
 
+# ╔═╡ 9a141034-17cb-4d85-a5a2-4724a38dd269
+macro visual_debug(expr)
+	quote
+		$(esc(:(PlutoTest.@eval_step_by_step($expr)))) .|> PlutoTest.SlottedDisplay |> PlutoTest.frames |> PlutoTest.with_slotted_css
+	end
+end
+
+# ╔═╡ 79f71f9d-b491-4a2c-85a4-29ae8da4f312
+@visual_debug(3y + 2(x-1))
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -207,12 +233,14 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
 HypertextLiteral = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
 LegibleLambdas = "f1f30506-32fe-5131-bd72-7c197988f9e5"
+PlutoTest = "cb4044da-4d16-4ffa-a6a3-8cad7f73ebdc"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 
 [compat]
 AbstractTrees = "~0.3.4"
 HypertextLiteral = "~0.9.3"
 LegibleLambdas = "~0.3.0"
+PlutoTest = "~0.2.2"
 PlutoUI = "~0.7.37"
 """
 
@@ -363,6 +391,12 @@ version = "2.2.3"
 deps = ["Artifacts", "Dates", "Downloads", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 
+[[deps.PlutoTest]]
+deps = ["HypertextLiteral", "InteractiveUtils", "Markdown", "Test"]
+git-tree-sha1 = "17aa9b81106e661cffa1c4c36c17ee1c50a86eda"
+uuid = "cb4044da-4d16-4ffa-a6a3-8cad7f73ebdc"
+version = "0.2.2"
+
 [[deps.PlutoUI]]
 deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "Markdown", "Random", "Reexport", "UUIDs"]
 git-tree-sha1 = "bf0a1121af131d9974241ba53f601211e9303a9e"
@@ -460,10 +494,12 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═18b1c55d-a6b5-44f6-b0b3-50bdb0aa9d96
 # ╠═506d408e-dc2b-4e12-b917-286e3f4079a2
 # ╠═076594af-13d1-49a6-b5a3-17fefa676b3b
+# ╠═ff78f53f-1ad6-4a05-9e38-0926223ed7a6
+# ╠═79f71f9d-b491-4a2c-85a4-29ae8da4f312
 # ╠═1a154bb7-93a3-4973-8908-788db77ac294
 # ╠═6b1fb808-e993-4c2b-b81b-6710f8206de7
 # ╠═437285d4-ec53-4bb7-9966-fcfb5352e205
-# ╠═ff78f53f-1ad6-4a05-9e38-0926223ed7a6
-# ╠═0e2d1994-36d0-4a79-b8d7-29e157c4ef2b
+# ╠═f6ce8448-d9ce-4453-9e47-dc6443d50f55
+# ╠═9a141034-17cb-4d85-a5a2-4724a38dd269
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
