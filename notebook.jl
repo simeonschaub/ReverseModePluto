@@ -116,7 +116,7 @@ grad(y)
 y
 
 # ╔═╡ 18b1c55d-a6b5-44f6-b0b3-50bdb0aa9d96
-w = x*y + x
+w = x*y + 4(x - 1)^2
 
 # ╔═╡ 506d408e-dc2b-4e12-b917-286e3f4079a2
 grad(w)
