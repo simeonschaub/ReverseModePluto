@@ -146,6 +146,10 @@ s2 = @htl """
 	box-sizing: unset;
 	background-color: var(--main-bg-color);
 	min-width: fit-content;
+	font-size: 1.6em;
+}
+.Treant > .node > span {
+	vertical-align: middle;
 }
 
 .Treant .collapse-switch { width: 100%; height: 100%; border: none; }
@@ -184,17 +188,20 @@ begin
 end
 
 # ╔═╡ 1f1b384a-6588-45a5-9dd3-6de3face8bfb
-function foo(x)
+function ad_steps(x::Expr; color_fwd="red", color_bwd="green", font_size=".8em")
+	span_fwd = @htl "<span style='color: $color_fwd; font-size: $font_size'>"
+	span_bwd = @htl "<span style='color: $color_bwd; font-size: $font_size'>"
+	
 	res = accumulate(Iterators.filter(x -> !isempty(children(x)), PostOrderDFS(x)); init=Dict()) do d, i
 		d = copy(d)
-		d[EX(i)] = @htl """<span style="color: red; font-size: 1em">$(repr(eval(i)))</span>"""
+		d[EX(i)] = @htl "&ensp;$(span_fwd)$(repr(eval(i)))</span>"
 		d
 	end
 	pushfirst!(res, Dict())
 	f = eval(x)
 	d = Dict{Any, Any}(f => 1)
 	let d1 = copy(res[end])
-		d1[EX(x)] = @htl """$(d1[EX(x)]) <span style="color: green; font-size: 1em">1</span>"""
+		d1[EX(x)] = @htl "$(d1[EX(x)])&ensp;$(span_bwd)1</span>"
 		push!(res, d1)
 	end
 	for (x, e) in zip(PreOrderDFS.((f, EX(x)))...)
@@ -203,9 +210,9 @@ function foo(x)
 		for (yᵢ, dyᵢ, e) in zip(x.deps, dy, children(e))
 			d1 = copy(res[end])
 			if haskey(d, yᵢ)
-				d1[e] = @htl """$(get(d1, e, "")) <span style="color: green; font-size: 1em"> + $dyᵢ</span>"""
+				d1[e] = @htl "$(get(d1, e, ""))$(span_bwd) + $dyᵢ</span>"
 			else
-				d1[e] = @htl """$(get(d1, e, "")) <span style="color: green; font-size: 1em">$dyᵢ</span>"""
+				d1[e] = @htl "$(get(d1, e, ""))&ensp;$(span_bwd)$dyᵢ</span>"
 			end
 			push!(res, d1)
 			d[yᵢ] = get(d, yᵢ, 0) + dyᵢ
@@ -215,7 +222,7 @@ function foo(x)
 end
 
 # ╔═╡ 5585e9bb-7160-4cbf-b072-eb482edb8771
-_bar = foo(bar);
+_bar = ad_steps(bar);
 
 # ╔═╡ 419842ed-fc24-420b-84eb-c9f9e575b860
 @bind i Slider(1:length(_bar))
@@ -244,7 +251,6 @@ function show_tree(x; height=400)
 
 			node: {
 				collapsable: true,
-				//style: {width: "500px"}
 			},
 
 			nodeAlign: "BOTTOM",
@@ -261,16 +267,6 @@ function show_tree(x; height=400)
 				connectorsAnimation: "bounce",
 				connectorsSpeed: 500
 			},
-			
-			callback: {
-            	onCreateNode: function( treeNode, treeNodeDom ) {
-					Console.log("Hi");
-					Console.log(treeNodeDom);
-				},
-				onToggleCollapseFinished: function ( treeNode, bIsCollapsed ) {
-					alert("Hi");
-					Console.log("Hi");}, // this = Tree
-			}
 		},
 
 		nodeStructure: $(to_json(x))
