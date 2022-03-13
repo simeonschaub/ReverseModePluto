@@ -181,7 +181,11 @@ We can further visualize each steps we just took. First we do the forwards calcu
 """
 
 # ╔═╡ 27b39d7d-fc08-4ccc-aea4-b64f8a4f5726
-ex = :(3y*x + 2(x-1)*x)
+# ex = :(3y*x + 2(x-1)*x)
+ex = :(x^3+y+z+👽)
+
+# ╔═╡ a6c2d3a2-326a-41dd-864d-aa3662466222
+x,y
 
 # ╔═╡ 5696b588-21c8-41cf-a28b-0b148a13dfa4
 html"<span style='color: red; font-size: 1.5em'>Move me!</span>"
@@ -219,13 +223,19 @@ end
 function ad_steps(x::Expr; color_fwd="red", color_bwd="green", font_size=".8em")
 	span_fwd = @htl "<span style='color: $color_fwd; font-size: $font_size'>"
 	span_bwd = @htl "<span style='color: $color_bwd; font-size: $font_size'>"
+
+    d1 = Dict(EX(i)=>@htl "&ensp;$(span_fwd)$(repr(e isa Tracked ?  e.val : e))</span>" for i∈PostOrderDFS(x) if isempty(children(x)))
 	
-	res = accumulate(Iterators.filter(x -> !isempty(children(x)), PostOrderDFS(x)); init=Dict()) do d, i
+	res = accumulate(Iterators.filter(x -> !isempty(children(x)), PostOrderDFS(x));init=d1) do d,i
+	#res = accumulate(PostOrderDFS(x);init=Dict()) do d, i
 		d = copy(d)
-		d[EX(i)] = @htl "&ensp;$(span_fwd)$(repr(eval(i)))</span>"
+		e = eval(i)
+		d[EX(i)] = @htl "&ensp;$(span_fwd)$(repr(e isa Tracked ?  e.val : e))</span>" 
 		d
 	end
-	pushfirst!(res, Dict())
+	
+	pushfirst!(res, d1)
+	
 	f = eval(x)
 	d = Dict{Any, Any}(f => 1)
 	let d1 = copy(res[end])
@@ -250,10 +260,15 @@ function ad_steps(x::Expr; color_fwd="red", color_bwd="green", font_size=".8em")
 end
 
 # ╔═╡ 5585e9bb-7160-4cbf-b072-eb482edb8771
-steps = ad_steps(ex);
+begin
+	👽 = Tracked{Int}(12, :👽)
+  steps = ad_steps(ex);
+end
 
 # ╔═╡ 419842ed-fc24-420b-84eb-c9f9e575b860
-@bind i Slider(1:length(steps))
+md"""
+i = $(@bind i Slider(1:length(steps)))
+"""
 
 # ╔═╡ 1a154bb7-93a3-4973-8908-788db77ac294
 s2 = @htl """
@@ -383,7 +398,7 @@ PlutoUI = "~0.7.37"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.7.2"
+julia_version = "1.7.1"
 manifest_format = "2.0"
 
 [[deps.AbstractPlutoDingetjes]]
@@ -641,8 +656,9 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═27b39d7d-fc08-4ccc-aea4-b64f8a4f5726
 # ╠═5585e9bb-7160-4cbf-b072-eb482edb8771
 # ╠═bb9bf66f-5ac8-4836-9d33-646a5c6f9015
+# ╠═a6c2d3a2-326a-41dd-864d-aa3662466222
 # ╟─5696b588-21c8-41cf-a28b-0b148a13dfa4
-# ╠═419842ed-fc24-420b-84eb-c9f9e575b860
+# ╟─419842ed-fc24-420b-84eb-c9f9e575b860
 # ╟─bcff2aa8-2387-44c7-a28f-39cd505a7adf
 # ╠═79f71f9d-b491-4a2c-85a4-29ae8da4f312
 # ╠═1f1b384a-6588-45a5-9dd3-6de3face8bfb
