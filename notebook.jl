@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.18.0
+# v0.18.2
 
 using Markdown
 using InteractiveUtils
@@ -37,6 +37,7 @@ begin
 		deps::Vector{Tracked}
 	end
 	Tracked{T}(x, name=gensym()) where {T} = Tracked{T}(x, name, nothing, Tracked[])
+	Base.convert(T::Type{Tracked{S}}, x::Tracked) where {S} = T(convert(S, x.val), x.name, x.df, x.deps)
 	# This tells Julia to convert any number added to a `Tracked` to a `Tracked` first
 	Base.promote_rule(::Type{Tracked{S}}, ::Type{T}) where {S<:Number, T<:Number} = Tracked{promote_type(S, T)}
 end
@@ -71,6 +72,11 @@ end
 # ╔═╡ 2141849b-675e-406c-8df4-34b2706507af
 function Base.:/(x::Tracked, y::Tracked)
 	Tracked(x.val / y.val, :/, @λ(Δ -> (Δ / y.val, -Δ * x.val / y.val^2)), Tracked[x, y])
+end
+
+# ╔═╡ 8ab0f55d-a393-4a8a-a48c-9ced26033f57
+function Base.sin(x::Tracked)
+	Tracked(sin(x.val), :sin, @λ(Δ -> (Δ * cos(x.val),)), Tracked[x,])
 end
 
 # ╔═╡ 4bfc2f7d-a5b0-44c7-8bb6-f1b834c1cc51
@@ -180,9 +186,12 @@ md"""
 We can further visualize each steps we just took. First we do the forwards calculation, where we also build up our tree, then we go down the tree in the opposite direction to accumulate our gradient.
 """
 
+# ╔═╡ d9304d8d-9a34-46f2-908d-42d5cc5f5c5f
+👽 = Tracked{Int}(12, :👽)
+
 # ╔═╡ 27b39d7d-fc08-4ccc-aea4-b64f8a4f5726
-# ex = :(3y*x + 2(x-1)*x)
-ex = :(x^3+y+z+👽)
+#ex = :(3y*x + 2(x-1)*x)
+ex = :(x^3 + y + sin(👽))
 
 # ╔═╡ a6c2d3a2-326a-41dd-864d-aa3662466222
 x,y
@@ -199,10 +208,30 @@ We can also visualize what Julia does in the forward pass on the code itself:
 begin
 	struct EX
 		x::Any
+		function EX(ex)
+			if Meta.isexpr(ex, :call) && ex.args[1] === :+ && length(ex.args) > 3
+				new(Expr(:call, :+, Expr(:call, :+, ex.args[2:end-1]...), ex.args[end]))
+			else
+				new(ex)
+			end
+		end
 	end
 	show_tree(ex::Expr) = show_tree(EX(ex))
-	Base.show(io::IO, ex::EX) = Base.show_unquoted(io, Meta.isexpr(ex.x, :call) ? ex.x.args[1] : ex.x)
-	AbstractTrees.children(ex::EX) = Meta.isexpr(ex.x, :call) ? EX.(ex.x.args[2:end]) : EX[]
+	function Base.show(io::IO, ex::EX)
+		Base.show_unquoted(io, Meta.isexpr(ex.x, :call) ? ex.x.args[1] : ex.x)
+		if Meta.isexpr(ex.x, :call) && ex.x.args[1] === :^
+			print(io, ex.x.args[3])
+		end
+	end
+	function AbstractTrees.children(ex::EX)
+		if Meta.isexpr(ex.x, :call)
+			ex.x.args[1] === :^ ? [EX(ex.x.args[2])] : EX.(ex.x.args[2:end])
+		else
+			EX[]
+		end
+	end
+	Base.:(==)(ex1::EX, ex2::EX) = ex1.x == ex2.x
+	Base.hash(ex::EX, i::UInt) = hash(ex.x, i)
 end
 
 # ╔═╡ 8110f306-a7bb-43a2-bb36-6182c59b4b2e
@@ -221,36 +250,42 @@ end
 
 # ╔═╡ 1f1b384a-6588-45a5-9dd3-6de3face8bfb
 function ad_steps(x::Expr; color_fwd="red", color_bwd="green", font_size=".8em")
+	x = EX(x)
+	repr(x) = sprint(show, x; context=:compact=>true)
 	span_fwd = @htl "<span style='color: $color_fwd; font-size: $font_size'>"
 	span_bwd = @htl "<span style='color: $color_bwd; font-size: $font_size'>"
 
-    d1 = Dict(EX(i)=>@htl "&ensp;$(span_fwd)$(repr(e isa Tracked ?  e.val : e))</span>" for i∈PostOrderDFS(x) if isempty(children(x)))
+    d1 = Dict(
+		let e = eval(i.x)
+			i => @htl "&ensp;$(span_fwd)$(repr(e isa Tracked ?  e.val : e))</span>"
+		end
+		for i in PostOrderDFS(x) if isempty(children(i))
+	)
 	
-	res = accumulate(Iterators.filter(x -> !isempty(children(x)), PostOrderDFS(x));init=d1) do d,i
-	#res = accumulate(PostOrderDFS(x);init=Dict()) do d, i
+	res = accumulate(Iterators.filter(x -> !isempty(children(x)), PostOrderDFS(x)); init=d1) do d,i
 		d = copy(d)
-		e = eval(i)
-		d[EX(i)] = @htl "&ensp;$(span_fwd)$(repr(e isa Tracked ?  e.val : e))</span>" 
+		e = eval(i.x)
+		d[i] = @htl "&ensp;$(span_fwd)$(repr(e isa Tracked ?  e.val : e))</span>" 
 		d
 	end
 	
 	pushfirst!(res, d1)
 	
-	f = eval(x)
+	f = eval(x.x)
 	d = Dict{Any, Any}(f => 1)
 	let d1 = copy(res[end])
-		d1[EX(x)] = @htl "$(d1[EX(x)])&ensp;$(span_bwd)1</span>"
+		d1[x] = @htl "$(d1[x])&ensp;$(span_bwd)1</span>"
 		push!(res, d1)
 	end
-	for (x, e) in zip(PreOrderDFS.((f, EX(x)))...)
+	for (x, e) in zip(PreOrderDFS.((f, x))...)
 		x.df === nothing && continue
 		dy = x.df(d[x])
 		for (yᵢ, dyᵢ, e) in zip(x.deps, dy, children(e))
 			d1 = copy(res[end])
 			if haskey(d, yᵢ)
-				d1[e] = @htl "$(get(d1, e, ""))$(span_bwd) + $dyᵢ</span>"
+				d1[e] = @htl "$(get(d1, e, ""))$(span_bwd) + $(repr(dyᵢ))</span>"
 			else
-				d1[e] = @htl "$(get(d1, e, ""))&ensp;$(span_bwd)$dyᵢ</span>"
+				d1[e] = @htl "$(get(d1, e, ""))&ensp;$(span_bwd)$(repr(dyᵢ))</span>"
 			end
 			push!(res, d1)
 			d[yᵢ] = get(d, yᵢ, 0) + dyᵢ
@@ -260,15 +295,10 @@ function ad_steps(x::Expr; color_fwd="red", color_bwd="green", font_size=".8em")
 end
 
 # ╔═╡ 5585e9bb-7160-4cbf-b072-eb482edb8771
-begin
-	👽 = Tracked{Int}(12, :👽)
-  steps = ad_steps(ex);
-end
+steps = ad_steps(ex);
 
 # ╔═╡ 419842ed-fc24-420b-84eb-c9f9e575b860
-md"""
-i = $(@bind i Slider(1:length(steps)))
-"""
+i = @bind i Slider(1:length(steps))
 
 # ╔═╡ 1a154bb7-93a3-4973-8908-788db77ac294
 s2 = @htl """
@@ -398,7 +428,7 @@ PlutoUI = "~0.7.37"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.7.1"
+julia_version = "1.7.2"
 manifest_format = "2.0"
 
 [[deps.AbstractPlutoDingetjes]]
@@ -634,6 +664,7 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═73d638bf-30c1-4694-b3a8-4b29c5e3fa65
 # ╠═2141849b-675e-406c-8df4-34b2706507af
 # ╠═ac097299-0a31-474c-ab26-a4fb24bb9046
+# ╠═8ab0f55d-a393-4a8a-a48c-9ced26033f57
 # ╟─4bfc2f7d-a5b0-44c7-8bb6-f1b834c1cc51
 # ╠═2188a663-5a85-4ce4-bc8d-20383481e59b
 # ╟─00da514b-c6be-4d95-a0de-aed486615f3a
@@ -653,12 +684,13 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═506d408e-dc2b-4e12-b917-286e3f4079a2
 # ╠═a7c8cb6a-6e17-4d8f-8958-fe3527c5b8e7
 # ╟─e55dfad2-db50-459f-ab54-fa7637fc3638
+# ╠═d9304d8d-9a34-46f2-908d-42d5cc5f5c5f
 # ╠═27b39d7d-fc08-4ccc-aea4-b64f8a4f5726
 # ╠═5585e9bb-7160-4cbf-b072-eb482edb8771
 # ╠═bb9bf66f-5ac8-4836-9d33-646a5c6f9015
 # ╠═a6c2d3a2-326a-41dd-864d-aa3662466222
 # ╟─5696b588-21c8-41cf-a28b-0b148a13dfa4
-# ╟─419842ed-fc24-420b-84eb-c9f9e575b860
+# ╠═419842ed-fc24-420b-84eb-c9f9e575b860
 # ╟─bcff2aa8-2387-44c7-a28f-39cd505a7adf
 # ╠═79f71f9d-b491-4a2c-85a4-29ae8da4f312
 # ╠═1f1b384a-6588-45a5-9dd3-6de3face8bfb
