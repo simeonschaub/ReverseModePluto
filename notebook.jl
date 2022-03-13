@@ -17,6 +17,14 @@ end
 # ╔═╡ d5559dba-9fe4-11ec-3744-ebd1408e7dc4
 using LegibleLambdas, AbstractTrees, PlutoUI, HypertextLiteral, PlutoTest
 
+# ╔═╡ 20571e1a-9687-4d42-98b3-b3bc0b207b3b
+md"## Let's write our own reverse-mode AD!"
+
+# ╔═╡ 5e02b2c0-10cf-4746-840d-7017648f89f8
+md"""
+We will use Julia's dispatch system for simplicity. This means we create a type `Tracked` for keeping track of our input variables and everything we'll need to calculate the gradient later.
+"""
+
 # ╔═╡ 99b6ab91-a022-449c-988c-0e5c5719c910
 begin
 	struct Tracked{T} <: Number
@@ -33,9 +41,14 @@ begin
 	Base.promote_rule(::Type{Tracked{S}}, ::Type{T}) where {S<:Number, T<:Number} = Tracked{promote_type(S, T)}
 end
 
+# ╔═╡ 885cd51d-895f-4996-a23b-780498b5b810
+md"""
+All overloads will do the operation (e.g. sum `x` and `y`), but also remember the pullback map and input variables for the reverse pass.
+
+`@λ` (from the *LegibleLambdas.jl* package) is just for the nicer printing, we could have replaced `@λ(Δ -> (Δ, Δ))` with `Δ -> (Δ, Δ)` if we didn't care about that
+"""
+
 # ╔═╡ 13487e65-5e48-4a37-9bea-f262dd7b6d56
-# calculate the sum, but also remember the pullback map and input variables for the reverse pass which we'll need to calculate the gradient
-# `@λ` is just for the nicer printing, we could have replaced `@λ(Δ -> (Δ, Δ))` with `Δ -> (Δ, Δ)` if we didn't care about that
 function Base.:+(x::Tracked, y::Tracked)
 	Tracked(x.val + y.val, :+, @λ(Δ -> (Δ, Δ)), Tracked[x, y])
 end
@@ -60,10 +73,21 @@ function Base.:/(x::Tracked, y::Tracked)
 	Tracked(x.val / y.val, :/, @λ(Δ -> (Δ / y.val, -Δ * x.val / y.val^2)), Tracked[x, y])
 end
 
+# ╔═╡ 4bfc2f7d-a5b0-44c7-8bb6-f1b834c1cc51
+md"""
+`Tracked` is a tree -- We just need to tell *AbstractTrees.jl* how to get the children for each node and we get tree printing and iteration over all nodes for free.
+"""
+
+# ╔═╡ 2188a663-5a85-4ce4-bc8d-20383481e59b
+AbstractTrees.children(x::Tracked) = x.deps
+
+# ╔═╡ 00da514b-c6be-4d95-a0de-aed486615f3a
+md"""
+Let's also overload `show` for nicer output:
+"""
+
 # ╔═╡ 7429ffcb-dcee-4090-972e-ffde8393a37a
 begin
-	# `Tracked` is a tree, we just need to tell AbstractTrees.jl how to get the children for each node
-	AbstractTrees.children(x::Tracked) = x.deps
 	# All this is just for nicer printing
 	function Base.show(io::IO, x::Tracked)
 		if x.df === nothing
@@ -81,24 +105,43 @@ begin
 	Base.show(io::IO, ::MIME"text/plain", x::Tracked) = print_tree(io, x)
 end
 
+# ╔═╡ 727b2de3-1ee7-4f14-897f-46d263fa12ee
+md"""
+Create some variables we want to eventually differentiate with respect to.
+"""
+
 # ╔═╡ 0b5e6560-81fd-4182-bba5-aca702fb3048
 begin
    x = Tracked{Int}(3, :x)
    y = Tracked{Int}(5, :y)
 end
 
-# ╔═╡ 81eb8a2d-a3a9-45af-a5a5-b96aefd48712
-(2x + (x-1)^2).val # The regular result of `2x + (x-1)^2`
+# ╔═╡ ccafd0b9-95aa-4e58-8afc-26cd3ee61cc9
+md"""
+Straight away we get the primal result of our calculation:
+"""
 
-# ╔═╡ e52aa672-69a9-419b-a992-e7a3d1364fb6
-# PreOrderDFS traverses this tree from the top down
-Text.(collect(PreOrderDFS(y*x+x^2)))
+# ╔═╡ 81eb8a2d-a3a9-45af-a5a5-b96aefd48712
+(2x*y + (x-1)^2).val # The result of `2x*y + (x-1)^2`
+
+# ╔═╡ 01eacbd4-ef37-4524-aecc-2ef9a1044cf8
+md"""
+To also get the gradient, we'll use `PreOrderDFS` to traverse the tree we just created from the top down.
+"""
 
 # ╔═╡ f0814e23-6f75-4db8-b277-d21d4926f876
-y*x+x^2
+z = (2x*y + (x-1)^2)
+
+# ╔═╡ e52aa672-69a9-419b-a992-e7a3d1364fb6
+# `PreOrderDFS` traverses this tree from the top down
+Text.(collect(PreOrderDFS(z)))
+
+# ╔═╡ d5565717-239b-41ab-b311-d59b383130ed
+md"""
+Ok, let's create our function `grad` which will accumulate all intermediate gradients into a dictionary:
+"""
 
 # ╔═╡ 99a3507b-ca03-429f-acde-e2d1ebb32054
-# produces a dict with all the intermediate gradient
 function grad(f::Tracked)
 	d = Dict{Any, Any}(f => 1)
 	for x in PreOrderDFS(f) # recursively traverse all dependents
@@ -116,14 +159,10 @@ end
 # ╔═╡ d4e9b202-242e-4420-986b-12d2ab57af93
 grad(f::Tracked, x::Tracked) = grad(f)[x]
 
-# ╔═╡ dc62ff81-dbb8-4416-8fc7-8878e16bdf85
-grad(y)
-
-# ╔═╡ fc8aeed7-2806-438a-85f7-c155b0b222e6
-#grad(y, x)
-
-# ╔═╡ a34a0941-6e7e-4a40-affa-7941c54a10b9
-y
+# ╔═╡ 7fcccb65-4a7b-4527-97be-d25f481f6eaf
+md"""
+We can verify that it does the right thing:
+"""
 
 # ╔═╡ 18b1c55d-a6b5-44f6-b0b3-50bdb0aa9d96
 w = x*y + x
@@ -132,10 +171,25 @@ w = x*y + x
 grad(w)
 
 # ╔═╡ a7c8cb6a-6e17-4d8f-8958-fe3527c5b8e7
+grad(w, x), grad(w, y)
 
+# ╔═╡ e55dfad2-db50-459f-ab54-fa7637fc3638
+md"""
+## How can we visualize both the forward and the reverse pass?
+
+We can further visualize each steps we just took. First we do the forwards calculation, where we also build up our tree, then we go down the tree in the opposite direction to accumulate our gradient.
+"""
 
 # ╔═╡ 27b39d7d-fc08-4ccc-aea4-b64f8a4f5726
 ex = :(3y*x + 2(x-1)*x)
+
+# ╔═╡ 5696b588-21c8-41cf-a28b-0b148a13dfa4
+html"<span style='color: red; font-size: 1.5em'>Move me!</span>"
+
+# ╔═╡ bcff2aa8-2387-44c7-a28f-39cd505a7adf
+md"""
+We can also visualize what Julia does in the forward pass on the code itself:
+"""
 
 # ╔═╡ d82adc20-4c8c-4f2c-9839-d03ad7e7f581
 begin
@@ -206,9 +260,8 @@ s2 = @htl """
 <link rel="stylesheet" href="https://fperucic.github.io/treant-js/Treant.css"/>
 <style>
 .Treant > .node {
-	padding: 3px; border: 1px solid #484848; border-radius: 3px;
+	padding: 5px; border: 2px solid #484848; border-radius: 8px;
 	box-sizing: unset;
-	background-color: var(--main-bg-color);
 	min-width: fit-content;
 	font-size: 1.6em;
 }
@@ -557,29 +610,40 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 
 # ╔═╡ Cell order:
 # ╠═d5559dba-9fe4-11ec-3744-ebd1408e7dc4
+# ╟─20571e1a-9687-4d42-98b3-b3bc0b207b3b
+# ╟─5e02b2c0-10cf-4746-840d-7017648f89f8
 # ╠═99b6ab91-a022-449c-988c-0e5c5719c910
+# ╟─885cd51d-895f-4996-a23b-780498b5b810
 # ╠═13487e65-5e48-4a37-9bea-f262dd7b6d56
 # ╠═b0cc4665-eb45-48ea-9a33-5acf56d2a283
 # ╠═73d638bf-30c1-4694-b3a8-4b29c5e3fa65
 # ╠═2141849b-675e-406c-8df4-34b2706507af
 # ╠═ac097299-0a31-474c-ab26-a4fb24bb9046
+# ╟─4bfc2f7d-a5b0-44c7-8bb6-f1b834c1cc51
+# ╠═2188a663-5a85-4ce4-bc8d-20383481e59b
+# ╟─00da514b-c6be-4d95-a0de-aed486615f3a
 # ╠═7429ffcb-dcee-4090-972e-ffde8393a37a
+# ╟─727b2de3-1ee7-4f14-897f-46d263fa12ee
 # ╠═0b5e6560-81fd-4182-bba5-aca702fb3048
+# ╟─ccafd0b9-95aa-4e58-8afc-26cd3ee61cc9
 # ╠═81eb8a2d-a3a9-45af-a5a5-b96aefd48712
-# ╠═e52aa672-69a9-419b-a992-e7a3d1364fb6
+# ╟─01eacbd4-ef37-4524-aecc-2ef9a1044cf8
 # ╠═f0814e23-6f75-4db8-b277-d21d4926f876
+# ╠═e52aa672-69a9-419b-a992-e7a3d1364fb6
+# ╟─d5565717-239b-41ab-b311-d59b383130ed
 # ╠═99a3507b-ca03-429f-acde-e2d1ebb32054
 # ╠═d4e9b202-242e-4420-986b-12d2ab57af93
-# ╠═dc62ff81-dbb8-4416-8fc7-8878e16bdf85
-# ╠═fc8aeed7-2806-438a-85f7-c155b0b222e6
-# ╠═a34a0941-6e7e-4a40-affa-7941c54a10b9
+# ╟─7fcccb65-4a7b-4527-97be-d25f481f6eaf
 # ╠═18b1c55d-a6b5-44f6-b0b3-50bdb0aa9d96
 # ╠═506d408e-dc2b-4e12-b917-286e3f4079a2
 # ╠═a7c8cb6a-6e17-4d8f-8958-fe3527c5b8e7
+# ╟─e55dfad2-db50-459f-ab54-fa7637fc3638
 # ╠═27b39d7d-fc08-4ccc-aea4-b64f8a4f5726
 # ╠═5585e9bb-7160-4cbf-b072-eb482edb8771
 # ╠═bb9bf66f-5ac8-4836-9d33-646a5c6f9015
+# ╟─5696b588-21c8-41cf-a28b-0b148a13dfa4
 # ╠═419842ed-fc24-420b-84eb-c9f9e575b860
+# ╟─bcff2aa8-2387-44c7-a28f-39cd505a7adf
 # ╠═79f71f9d-b491-4a2c-85a4-29ae8da4f312
 # ╠═1f1b384a-6588-45a5-9dd3-6de3face8bfb
 # ╠═d82adc20-4c8c-4f2c-9839-d03ad7e7f581
