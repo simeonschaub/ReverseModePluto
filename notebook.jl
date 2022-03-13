@@ -4,6 +4,16 @@
 using Markdown
 using InteractiveUtils
 
+# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
+macro bind(def, element)
+    quote
+        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
+        local el = $(esc(element))
+        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
+        el
+    end
+end
+
 # ╔═╡ d5559dba-9fe4-11ec-3744-ebd1408e7dc4
 using LegibleLambdas, AbstractTrees, PlutoUI, HypertextLiteral, PlutoTest
 
@@ -121,15 +131,21 @@ w = x*y + x
 # ╔═╡ 506d408e-dc2b-4e12-b917-286e3f4079a2
 grad(w)
 
+# ╔═╡ a7c8cb6a-6e17-4d8f-8958-fe3527c5b8e7
+
+
+# ╔═╡ 27b39d7d-fc08-4ccc-aea4-b64f8a4f5726
+bar = :(3y*x + 2(x-1))
+
 # ╔═╡ 1a154bb7-93a3-4973-8908-788db77ac294
-@htl """
+s2 = @htl """
 <link rel="stylesheet" href="https://fperucic.github.io/treant-js/Treant.css"/>
 <style>
 .Treant > .node {
 	padding: 3px; border: 1px solid #484848; border-radius: 3px;
 	box-sizing: unset;
 	background-color: var(--main-bg-color);
-	width: 200px,
+	min-width: fit-content;
 }
 
 .Treant .collapse-switch { width: 100%; height: 100%; border: none; }
@@ -143,17 +159,79 @@ grad(w)
 <script src="https://fperucic.github.io/treant-js/Treant.js"></script>
 """
 
+# ╔═╡ d82adc20-4c8c-4f2c-9839-d03ad7e7f581
+begin
+	struct EX
+		x::Any
+	end
+	show_tree(ex::Expr) = show_tree(EX(ex))
+	Base.show(io::IO, ex::EX) = Base.show_unquoted(io, Meta.isexpr(ex.x, :call) ? ex.x.args[1] : ex.x)
+	AbstractTrees.children(ex::EX) = Meta.isexpr(ex.x, :call) ? EX.(ex.x.args[2:end]) : EX[]
+end
+
+# ╔═╡ 8110f306-a7bb-43a2-bb36-6182c59b4b2e
+begin
+	struct TTREE
+		x
+		d::Dict{Any, Any}
+	end
+	function Base.show(io::IO, x::TTREE)
+		show(io, x.x)
+		print(io, " ")
+		show(io, MIME("text/html"), get(x.d, x.x, @htl("")))
+	end
+	AbstractTrees.children(x::TTREE) = (TTREE(i, x.d) for i in children(x.x))
+end
+
+# ╔═╡ 1f1b384a-6588-45a5-9dd3-6de3face8bfb
+function foo(x)
+	res = accumulate(Iterators.filter(x -> !isempty(children(x)), PostOrderDFS(x)); init=Dict()) do d, i
+		d = copy(d)
+		d[EX(i)] = @htl """<span style="color: red; font-size: 1em">$(repr(eval(i)))</span>"""
+		d
+	end
+	pushfirst!(res, Dict())
+	f = eval(x)
+	d = Dict{Any, Any}(f => 1)
+	let d1 = copy(res[end])
+		d1[EX(x)] = @htl """$(d1[EX(x)]) <span style="color: green; font-size: 1em">1</span>"""
+		push!(res, d1)
+	end
+	for (x, e) in zip(PreOrderDFS.((f, EX(x)))...)
+		x.df === nothing && continue
+		dy = x.df(d[x])
+		for (yᵢ, dyᵢ, e) in zip(x.deps, dy, children(e))
+			d1 = copy(res[end])
+			if haskey(d, yᵢ)
+				d1[e] = @htl """$(get(d1, e, "")) <span style="color: green; font-size: 1em"> + $dyᵢ</span>"""
+			else
+				d1[e] = @htl """$(get(d1, e, "")) <span style="color: green; font-size: 1em">$dyᵢ</span>"""
+			end
+			push!(res, d1)
+			d[yᵢ] = get(d, yᵢ, 0) + dyᵢ
+		end
+	end
+	res
+end
+
+# ╔═╡ 5585e9bb-7160-4cbf-b072-eb482edb8771
+_bar = foo(bar);
+
+# ╔═╡ 419842ed-fc24-420b-84eb-c9f9e575b860
+@bind i Slider(1:length(_bar))
+
 # ╔═╡ 6b1fb808-e993-4c2b-b81b-6710f8206de7
 function to_json(x)
 	d = Dict{Symbol, Any}(
-		:text => Dict{Symbol, Any}(:name => sprint(AbstractTrees.printnode, x)),
+		:innerHTML => sprint(AbstractTrees.printnode, x),
 		:children => Any[to_json(c) for c in children(x)],
-		:collapsed => !isempty(children(x)),
+		#:collapsed => !isempty(children(x)),
 	)
 end
 
 # ╔═╡ 437285d4-ec53-4bb7-9966-fcfb5352e205
 function show_tree(x; height=400)
+	s2
 	id = gensym()
 	@htl """
 	<div id="$id" style="width:100%; height: $(height)px"> </div>
@@ -162,11 +240,11 @@ function show_tree(x; height=400)
 		chart: {
 			container: "#$id",
 
-			animateOnInit: true,
+			//animateOnInit: true,
 
 			node: {
 				collapsable: true,
-				style: {width: "500px"}
+				//style: {width: "500px"}
 			},
 
 			nodeAlign: "BOTTOM",
@@ -182,6 +260,16 @@ function show_tree(x; height=400)
 				nodeSpeed: 500,
 				connectorsAnimation: "bounce",
 				connectorsSpeed: 500
+			},
+			
+			callback: {
+            	onCreateNode: function( treeNode, treeNodeDom ) {
+					Console.log("Hi");
+					Console.log(treeNodeDom);
+				},
+				onToggleCollapseFinished: function ( treeNode, bIsCollapsed ) {
+					alert("Hi");
+					Console.log("Hi");}, // this = Tree
 			}
 		},
 
@@ -192,14 +280,11 @@ function show_tree(x; height=400)
 	"""
 end
 
-# ╔═╡ 076594af-13d1-49a6-b5a3-17fefa676b3b
-show_tree(w)
-
-# ╔═╡ ff78f53f-1ad6-4a05-9e38-0926223ed7a6
-show_tree(:(3y + 2(x-1)))
+# ╔═╡ bb9bf66f-5ac8-4836-9d33-646a5c6f9015
+show_tree(TTREE(EX(bar), _bar[i]))
 
 # ╔═╡ f6ce8448-d9ce-4453-9e47-dc6443d50f55
-html"""
+s1 = html"""
 <style>
 p-frame-viewer {
 	display: inline-flex;
@@ -219,6 +304,7 @@ line-like {
 
 # ╔═╡ 9a141034-17cb-4d85-a5a2-4724a38dd269
 macro visual_debug(expr)
+	s1
 	quote
 		$(esc(:(PlutoTest.@eval_step_by_step($expr)))) .|> PlutoTest.SlottedDisplay |> PlutoTest.frames |> PlutoTest.with_slotted_css
 	end
@@ -493,12 +579,18 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═a34a0941-6e7e-4a40-affa-7941c54a10b9
 # ╠═18b1c55d-a6b5-44f6-b0b3-50bdb0aa9d96
 # ╠═506d408e-dc2b-4e12-b917-286e3f4079a2
-# ╠═076594af-13d1-49a6-b5a3-17fefa676b3b
-# ╠═ff78f53f-1ad6-4a05-9e38-0926223ed7a6
+# ╠═a7c8cb6a-6e17-4d8f-8958-fe3527c5b8e7
+# ╠═27b39d7d-fc08-4ccc-aea4-b64f8a4f5726
+# ╠═5585e9bb-7160-4cbf-b072-eb482edb8771
+# ╠═bb9bf66f-5ac8-4836-9d33-646a5c6f9015
+# ╠═419842ed-fc24-420b-84eb-c9f9e575b860
 # ╠═79f71f9d-b491-4a2c-85a4-29ae8da4f312
+# ╠═1f1b384a-6588-45a5-9dd3-6de3face8bfb
 # ╠═1a154bb7-93a3-4973-8908-788db77ac294
 # ╠═6b1fb808-e993-4c2b-b81b-6710f8206de7
 # ╠═437285d4-ec53-4bb7-9966-fcfb5352e205
+# ╠═d82adc20-4c8c-4f2c-9839-d03ad7e7f581
+# ╠═8110f306-a7bb-43a2-bb36-6182c59b4b2e
 # ╠═f6ce8448-d9ce-4453-9e47-dc6443d50f55
 # ╠═9a141034-17cb-4d85-a5a2-4724a38dd269
 # ╟─00000000-0000-0000-0000-000000000001
