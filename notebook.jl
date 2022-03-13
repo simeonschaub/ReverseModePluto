@@ -135,33 +135,7 @@ grad(w)
 
 
 # ╔═╡ 27b39d7d-fc08-4ccc-aea4-b64f8a4f5726
-bar = :(3y*x + 2(x-1))
-
-# ╔═╡ 1a154bb7-93a3-4973-8908-788db77ac294
-s2 = @htl """
-<link rel="stylesheet" href="https://fperucic.github.io/treant-js/Treant.css"/>
-<style>
-.Treant > .node {
-	padding: 3px; border: 1px solid #484848; border-radius: 3px;
-	box-sizing: unset;
-	background-color: var(--main-bg-color);
-	min-width: fit-content;
-	font-size: 1.6em;
-}
-.Treant > .node > span {
-	vertical-align: middle;
-}
-
-.Treant .collapse-switch { width: 100%; height: 100%; border: none; }
-.Treant .node.collapsed { background-color: var(--main-bg-color); }
-.Treant .node.collapsed .collapse-switch { background: none;}
-</style>
-
-<script src="https://fperucic.github.io/treant-js/vendor/jquery.min.js"></script>
-<script src="https://fperucic.github.io/treant-js/vendor/jquery.easing.js"></script>
-<script src="https://fperucic.github.io/treant-js/vendor/raphael.js"></script>
-<script src="https://fperucic.github.io/treant-js/Treant.js"></script>
-"""
+ex = :(3y*x + 2(x-1)*x)
 
 # ╔═╡ d82adc20-4c8c-4f2c-9839-d03ad7e7f581
 begin
@@ -222,10 +196,36 @@ function ad_steps(x::Expr; color_fwd="red", color_bwd="green", font_size=".8em")
 end
 
 # ╔═╡ 5585e9bb-7160-4cbf-b072-eb482edb8771
-_bar = ad_steps(bar);
+steps = ad_steps(ex);
 
 # ╔═╡ 419842ed-fc24-420b-84eb-c9f9e575b860
-@bind i Slider(1:length(_bar))
+@bind i Slider(1:length(steps))
+
+# ╔═╡ 1a154bb7-93a3-4973-8908-788db77ac294
+s2 = @htl """
+<link rel="stylesheet" href="https://fperucic.github.io/treant-js/Treant.css"/>
+<style>
+.Treant > .node {
+	padding: 3px; border: 1px solid #484848; border-radius: 3px;
+	box-sizing: unset;
+	background-color: var(--main-bg-color);
+	min-width: fit-content;
+	font-size: 1.6em;
+}
+.Treant > .node > span {
+	vertical-align: middle;
+}
+
+.Treant .collapse-switch { width: 100%; height: 100%; border: none; }
+.Treant .node.collapsed { background-color: var(--main-bg-color); }
+.Treant .node.collapsed .collapse-switch { background: none;}
+</style>
+
+<script src="https://fperucic.github.io/treant-js/vendor/jquery.min.js"></script>
+<script src="https://fperucic.github.io/treant-js/vendor/jquery.easing.js"></script>
+<script src="https://fperucic.github.io/treant-js/vendor/raphael.js"></script>
+<script src="https://fperucic.github.io/treant-js/Treant.js"></script>
+"""
 
 # ╔═╡ 6b1fb808-e993-4c2b-b81b-6710f8206de7
 function to_json(x)
@@ -277,7 +277,7 @@ function show_tree(x; height=400)
 end
 
 # ╔═╡ bb9bf66f-5ac8-4836-9d33-646a5c6f9015
-show_tree(TTREE(EX(bar), _bar[i]))
+show_tree(TTREE(EX(ex), steps[i]))
 
 # ╔═╡ f6ce8448-d9ce-4453-9e47-dc6443d50f55
 s1 = html"""
@@ -307,7 +307,7 @@ macro visual_debug(expr)
 end
 
 # ╔═╡ 79f71f9d-b491-4a2c-85a4-29ae8da4f312
-@visual_debug(3y + 2(x-1))
+@visual_debug 3y + 2(x-1)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -582,11 +582,11 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═419842ed-fc24-420b-84eb-c9f9e575b860
 # ╠═79f71f9d-b491-4a2c-85a4-29ae8da4f312
 # ╠═1f1b384a-6588-45a5-9dd3-6de3face8bfb
+# ╠═d82adc20-4c8c-4f2c-9839-d03ad7e7f581
+# ╠═8110f306-a7bb-43a2-bb36-6182c59b4b2e
 # ╠═1a154bb7-93a3-4973-8908-788db77ac294
 # ╠═6b1fb808-e993-4c2b-b81b-6710f8206de7
 # ╠═437285d4-ec53-4bb7-9966-fcfb5352e205
-# ╠═d82adc20-4c8c-4f2c-9839-d03ad7e7f581
-# ╠═8110f306-a7bb-43a2-bb36-6182c59b4b2e
 # ╠═f6ce8448-d9ce-4453-9e47-dc6443d50f55
 # ╠═9a141034-17cb-4d85-a5a2-4724a38dd269
 # ╟─00000000-0000-0000-0000-000000000001
