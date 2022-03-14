@@ -215,7 +215,7 @@ We need some more overloads
 
 # ╔═╡ 520f280d-c78e-433b-a0a2-8ef05b04f7cc
 function Base.broadcasted(::typeof(tanh), x::Tracked)
-	res = map(tanh, x.val)
+	res = tanh.(x.val)
 	Tracked(res, :tanh, @λ(Δ -> (Δ .* (1 .- res.^2),)), Tracked[x,])
 end
 
@@ -243,7 +243,7 @@ $x \mapsto \tanh.(W \cdot x + b)$
 """
 
 # ╔═╡ 788903f0-a372-4265-bbf3-5b507a705100
-NN(x, (W1, W2, W3, b1, b2, b3)) = tanh.(W3 * tanh.(W2 * tanh.(W1 * @t(x) .+ b1) .+ b2) .+ b3)
+NN(x, (W1, W2, W3, b1, b2, b3)) = W3 * tanh.(W2 * tanh.(W1 * @t(x) .+ b1) .+ b2) .+ b3
 
 # ╔═╡ 337bc837-174f-4ed6-bee1-c9e80dc03b52
 input = collect(range(0, 2π; length=100))'
@@ -254,7 +254,7 @@ We'll try to approximate a sine curve:
 """
 
 # ╔═╡ d2d21d41-9a4e-428b-b696-6878901849ba
-ŷ = sin.(input)
+ŷ = sin.(input) #.+ .2input .^ 2 .- cos.(5input)
 
 # ╔═╡ 98807f0d-f8a5-4fe0-9983-2b95290347d9
 md"""
@@ -301,8 +301,9 @@ end
 
 # ╔═╡ 96286b65-1a22-4458-a399-46579248cce4
 begin
-	W1, W2, W3 = randn(32, 1), randn(32, 32), randn(1, 32)
-	b1, b2, b3 = randn(32), randn(32), randn(1)
+	_rand(s...) = randn(s...) / √prod(s)
+	W1, W2, W3 = _rand(32, 1), _rand(32, 32), _rand(1, 32)
+	b1, b2, b3 = _rand(32), _rand(32), _rand(1)
 	params = [@t(W1), @t(W2), @t(W3), @t(b1), @t(b2), @t(b3)]
 	p = @animate for i in 1:10000
 		loss = norm(NN(input, params) - @t(ŷ))
