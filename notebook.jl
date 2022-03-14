@@ -263,21 +263,6 @@ md"""
 (It's even reasonably fast for neural nets)
 """
 
-# ╔═╡ 96286b65-1a22-4458-a399-46579248cce4
-begin
-	W1, W2, W3 = randn(32, 1), randn(32, 32), randn(1, 32)
-	b1, b2, b3 = randn(32), randn(32), randn(1)
-	params = [@t(W1), @t(W2), @t(W3), @t(b1), @t(b2), @t(b3)]
-	for _ in 1:10000
-		loss = norm(NN(input, params) - @t(ŷ))
-		∇ = grad(loss)
-		for p in params
-			p.val .-= 1e-3 .* ∇[p]
-		end
-	end
-	plot(input', [NN(input, params).val; ŷ]'; label=["prediction" "training data"])
-end
-
 # ╔═╡ e5d3f23e-3295-4d9b-a9aa-17270e5ca67a
 function Base.show(io::IO, x::Tracked{<:AbstractArray})
 	io = IOContext(io, :compact=>true)
@@ -312,6 +297,22 @@ begin
 	end
 	Base.:(==)(ex1::EX, ex2::EX) = ex1.x == ex2.x
 	Base.hash(ex::EX, i::UInt) = hash(ex.x, i)
+end
+
+# ╔═╡ 96286b65-1a22-4458-a399-46579248cce4
+begin
+	W1, W2, W3 = randn(32, 1), randn(32, 32), randn(1, 32)
+	b1, b2, b3 = randn(32), randn(32), randn(1)
+	params = [@t(W1), @t(W2), @t(W3), @t(b1), @t(b2), @t(b3)]
+	p = @animate for i in 1:10000
+		loss = norm(NN(input, params) - @t(ŷ))
+		∇ = grad(loss)
+		for p in params
+			p.val .-= 1e-3 .* ∇[p]
+		end
+		plot(input', [NN(input, params).val; ŷ]'; label=["prediction" "training data"])
+	end every 200
+	gif(p; fps=5)
 end
 
 # ╔═╡ 8110f306-a7bb-43a2-bb36-6182c59b4b2e
