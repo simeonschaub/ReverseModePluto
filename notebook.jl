@@ -395,9 +395,9 @@ end
 
 # ╔═╡ 437285d4-ec53-4bb7-9966-fcfb5352e205
 function show_tree(x; height=400)
-	s2
 	id = gensym()
 	@htl """
+	$s2
 	<div id="$id" style="width:100%; height: $(height)px"> </div>
 	<script>
 	var simple_chart_config = {
@@ -438,9 +438,9 @@ show_tree(norm(NN(input, params) - @t(ŷ)); height = 1000)
 
 # ╔═╡ 094bf7ee-7c9b-458c-98dc-521768831654
 function show_steps(steps; height=400)
-	s2
 	id1, id2 = gensym(), gensym()
 	@htl """
+	$s2
 	<div id="$id1" style="width:100%; height: $(height)px"> </div>
 	<input id="$id2" type="range" min="0" max="$(length(steps)-1)" value="0">
 	<script>
