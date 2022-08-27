@@ -395,6 +395,7 @@ end
 
 # ╔═╡ 437285d4-ec53-4bb7-9966-fcfb5352e205
 function show_tree(x; height=400)
+	s2
 	id = gensym()
 	@htl """
 	<div id="$id" style="width:100%; height: $(height)px"> </div>
@@ -433,10 +434,11 @@ function show_tree(x; height=400)
 end
 
 # ╔═╡ 86aa821b-a373-4814-953e-535f3a33c002
-s2; show_tree(norm(NN(input, params) - @t(ŷ)); height = 1000)
+show_tree(norm(NN(input, params) - @t(ŷ)); height = 1000)
 
 # ╔═╡ 094bf7ee-7c9b-458c-98dc-521768831654
 function show_steps(steps; height=400)
+	s2
 	id1, id2 = gensym(), gensym()
 	@htl """
 	<div id="$id1" style="width:100%; height: $(height)px"> </div>
@@ -484,7 +486,6 @@ end
 # ╔═╡ faf69c6f-b179-4ca2-aa22-641e9560e17b
 macro ad_steps(ex)
 	quote
-		$(esc(:s2))
 		ex = $(QuoteNode(ex))
 		steps = ad_steps(ex)
 		show_steps([TTREE(EX(ex), step) for step in steps])
