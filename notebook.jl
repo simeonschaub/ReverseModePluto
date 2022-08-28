@@ -272,52 +272,6 @@ function Base.show(io::IO, x::Tracked{<:AbstractArray})
 		print(io, Base.isgensym(x.name) ? x.val : string(x.name))
 end
 
-# ╔═╡ 1f1b384a-6588-45a5-9dd3-6de3face8bfb
-function ad_steps(x::Expr; color_fwd="red", color_bwd="green", font_size=".8em")
-	x = EX(x)
-	repr(x) = sprint(show, x; context=:compact=>true)
-	span_fwd = @htl "<span style='color: $color_fwd; font-size: $font_size'>"
-	span_bwd = @htl "<span style='color: $color_bwd; font-size: $font_size'>"
-
-    d1 = Dict(
-		let e = eval(i.x)
-			i => @htl "&ensp;$(span_fwd)$(repr(e isa Tracked ?  e.val : e))</span>"
-		end
-		for i in PostOrderDFS(x) if isempty(children(i))
-	)
-	
-	res = accumulate(Iterators.filter(x -> !isempty(children(x)), PostOrderDFS(x)); init=d1) do d,i
-		d = copy(d)
-		e = eval(i.x)
-		d[i] = @htl "&ensp;$(span_fwd)$(repr(e isa Tracked ?  e.val : e))</span>" 
-		d
-	end
-	
-	pushfirst!(res, d1)
-	
-	f = eval(x.x)
-	d = Dict{Any, Any}(f => 1)
-	let d1 = copy(res[end])
-		d1[x] = @htl "$(d1[x])&ensp;$(span_bwd)1</span>"
-		push!(res, d1)) plot. The ith vector extends from (x[i],y[i]) to (x[i] + u[i], y[i]
-	end
-	for (x, e) in zip(PreOrderDFS.((f, x))...)
-		x.df === nothing && continue
-		dy = x.df(d[x])
-		for (yᵢ, dyᵢ, e) in zip(x.deps, dy, children(e))
-			d1 = copy(res[end])
-			if haskey(d, yᵢ)
-				d1[e] = @htl "$(get(d1, e, ""))$(span_bwd) + $(repr(dyᵢ))</span>"
-			else
-				d1[e] = @htl "$(get(d1, e, ""))&ensp;$(span_bwd)$(repr(dyᵢ))</span>"
-			end
-			push!(res, d1)
-			d[yᵢ] = get(d, yᵢ, 0) + dyᵢ
-		end
-	end
-	res
-end
-
 # ╔═╡ d82adc20-4c8c-4f2c-9839-d03ad7e7f581
 begin
 	struct EX
@@ -410,6 +364,52 @@ begin
 		show(io, MIME("text/html"), get(x.d, x.x, @htl("")))
 	end
 	AbstractTrees.children(x::TTREE) = (TTREE(i, x.d) for i in children(x.x))
+end
+
+# ╔═╡ 1f1b384a-6588-45a5-9dd3-6de3face8bfb
+function ad_steps(x::Expr; color_fwd="red", color_bwd="green", font_size=".8em")
+	x = EX(x)
+	repr(x) = sprint(show, x; context=:compact=>true)
+	span_fwd = @htl "<span style='color: $color_fwd; font-size: $font_size'>"
+	span_bwd = @htl "<span style='color: $color_bwd; font-size: $font_size'>"
+
+    d1 = Dict(
+		let e = eval(i.x)
+			i => @htl "&ensp;$(span_fwd)$(repr(e isa Tracked ?  e.val : e))</span>"
+		end
+		for i in PostOrderDFS(x) if isempty(children(i))
+	)
+
+	res = accumulate(Iterators.filter(x -> !isempty(children(x)), PostOrderDFS(x)); init=d1) do d,i
+		d = copy(d)
+		e = eval(i.x)
+		d[i] = @htl "&ensp;$(span_fwd)$(repr(e isa Tracked ?  e.val : e))</span>" 
+		d
+	end
+
+	pushfirst!(res, d1)
+
+	f = eval(x.x)
+	d = Dict{Any, Any}(f => 1)
+	let d1 = copy(res[end])
+		d1[x] = @htl "$(d1[x])&ensp;$(span_bwd)1</span>"
+		push!(res, d1)
+	end
+	for (x, e) in zip(PreOrderDFS.((f, x))...)
+		x.df === nothing && continue
+		dy = x.df(d[x])
+		for (yᵢ, dyᵢ, e) in zip(x.deps, dy, children(e))
+			d1 = copy(res[end])
+			if haskey(d, yᵢ)
+				d1[e] = @htl "$(get(d1, e, ""))$(span_bwd) + $(repr(dyᵢ))</span>"
+			else
+				d1[e] = @htl "$(get(d1, e, ""))&ensp;$(span_bwd)$(repr(dyᵢ))</span>"
+			end
+			push!(res, d1)
+			d[yᵢ] = get(d, yᵢ, 0) + dyᵢ
+		end
+	end
+	res
 end
 
 # ╔═╡ 1a154bb7-93a3-4973-8908-788db77ac294
