@@ -246,6 +246,26 @@ md"""
 (It's even reasonably fast for neural nets)
 """
 
+# ╔═╡ 85098c31-04a1-421c-b3f6-25fec9360588
+md"### What if we use a (leaky) rectified linear unit (ReLU) as activation?"
+
+# ╔═╡ 7dca2c78-6faf-450a-8096-1c5b9f7f1295
+leaky_relu(x) = x > 0 ? x : .1x
+
+# ╔═╡ b2622dc4-2fd3-4d80-8efd-a6a985a6b2e9
+function Base.broadcasted(::typeof(leaky_relu), x::Tracked)
+	Tracked(leaky_relu.(x.val), :tanh, @λ(Δ -> (map((x, Δ) -> x > 0 ? Δ : .1Δ, x.val, Δ),)), Tracked[x,])
+end
+
+# ╔═╡ 0911a08a-4290-455b-9b26-0bf2862296da
+plot(leaky_relu; label="leaky relu")
+
+# ╔═╡ 0b094198-cf44-41d7-a8dc-fd8fd0716bb4
+md"""
+---
+### Helper Functions
+"""
+
 # ╔═╡ e5d3f23e-3295-4d9b-a9aa-17270e5ca67a
 function Base.show(io::IO, x::Tracked{<:AbstractArray})
 	io = IOContext(io, :compact=>true)
@@ -288,6 +308,20 @@ begin
 	W1, W2, W3 = _rand(32, 1), _rand(32, 32), _rand(1, 32)
 	b1, b2, b3 = _rand(32), _rand(32), _rand(1)
 	params = [@t(W1), @t(W2), @t(W3), @t(b1), @t(b2), @t(b3)]
+	p = @animate for i in 1:10000
+		loss = norm(NN(input, params) - @t(ŷ))
+		∇ = grad(loss)
+		for p in params
+			p.val .-= 1e-3 .* ∇[p]
+		end
+		plot(input', [NN(input, params).val; ŷ]'; label=["prediction" "training data"])
+	end every 200
+	gif(p; fps=5)
+end
+
+# ╔═╡ 86fa378b-815d-4c3d-9121-1338ee54f30f
+let
+	NN(x, (W1, W2, W3, b1, b2, b3)) = W3 * leaky_relu.(W2 * leaky_relu.(W1 * @t(x) .+ b1) .+ b2) .+ b3
 	p = @animate for i in 1:10000
 		loss = norm(NN(input, params) - @t(ŷ))
 		∇ = grad(loss)
@@ -442,7 +476,8 @@ function show_steps(steps; height=400)
 	@htl """
 	$s2
 	<div id="$id1" style="width:100%; height: $(height)px"> </div>
-	<input id="$id2" type="range" min="0" max="$(length(steps)-1)" value="0">
+	<span style="color: red; font-size: 1.5em; margin-bottom: 1em">Move me!</span>
+	<input id="$id2" type="range" min="0" max="$(length(steps)-1)" value="0" style="width: 100%">
 	<script>
 	var steps = $(to_json.(steps));
 	var simple_chart_config = {
@@ -1613,6 +1648,12 @@ version = "1.4.1+0"
 # ╟─98807f0d-f8a5-4fe0-9983-2b95290347d9
 # ╠═96286b65-1a22-4458-a399-46579248cce4
 # ╠═86aa821b-a373-4814-953e-535f3a33c002
+# ╟─85098c31-04a1-421c-b3f6-25fec9360588
+# ╠═7dca2c78-6faf-450a-8096-1c5b9f7f1295
+# ╠═b2622dc4-2fd3-4d80-8efd-a6a985a6b2e9
+# ╠═0911a08a-4290-455b-9b26-0bf2862296da
+# ╠═86fa378b-815d-4c3d-9121-1338ee54f30f
+# ╟─0b094198-cf44-41d7-a8dc-fd8fd0716bb4
 # ╠═e5d3f23e-3295-4d9b-a9aa-17270e5ca67a
 # ╠═1f1b384a-6588-45a5-9dd3-6de3face8bfb
 # ╠═d82adc20-4c8c-4f2c-9839-d03ad7e7f581
