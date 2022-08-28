@@ -272,6 +272,52 @@ function Base.show(io::IO, x::Tracked{<:AbstractArray})
 		print(io, Base.isgensym(x.name) ? x.val : string(x.name))
 end
 
+# ╔═╡ 1f1b384a-6588-45a5-9dd3-6de3face8bfb
+function ad_steps(x::Expr; color_fwd="red", color_bwd="green", font_size=".8em")
+	x = EX(x)
+	repr(x) = sprint(show, x; context=:compact=>true)
+	span_fwd = @htl "<span style='color: $color_fwd; font-size: $font_size'>"
+	span_bwd = @htl "<span style='color: $color_bwd; font-size: $font_size'>"
+
+    d1 = Dict(
+		let e = eval(i.x)
+			i => @htl "&ensp;$(span_fwd)$(repr(e isa Tracked ?  e.val : e))</span>"
+		end
+		for i in PostOrderDFS(x) if isempty(children(i))
+	)
+	
+	res = accumulate(Iterators.filter(x -> !isempty(children(x)), PostOrderDFS(x)); init=d1) do d,i
+		d = copy(d)
+		e = eval(i.x)
+		d[i] = @htl "&ensp;$(span_fwd)$(repr(e isa Tracked ?  e.val : e))</span>" 
+		d
+	end
+	
+	pushfirst!(res, d1)
+	
+	f = eval(x.x)
+	d = Dict{Any, Any}(f => 1)
+	let d1 = copy(res[end])
+		d1[x] = @htl "$(d1[x])&ensp;$(span_bwd)1</span>"
+		push!(res, d1)) plot. The ith vector extends from (x[i],y[i]) to (x[i] + u[i], y[i]
+	end
+	for (x, e) in zip(PreOrderDFS.((f, x))...)
+		x.df === nothing && continue
+		dy = x.df(d[x])
+		for (yᵢ, dyᵢ, e) in zip(x.deps, dy, children(e))
+			d1 = copy(res[end])
+			if haskey(d, yᵢ)
+				d1[e] = @htl "$(get(d1, e, ""))$(span_bwd) + $(repr(dyᵢ))</span>"
+			else
+				d1[e] = @htl "$(get(d1, e, ""))&ensp;$(span_bwd)$(repr(dyᵢ))</span>"
+			end
+			push!(res, d1)
+			d[yᵢ] = get(d, yᵢ, 0) + dyᵢ
+		end
+	end
+	res
+end
+
 # ╔═╡ d82adc20-4c8c-4f2c-9839-d03ad7e7f581
 begin
 	struct EX
@@ -319,9 +365,28 @@ begin
 	gif(p; fps=5)
 end
 
+# ╔═╡ 49333dc7-b809-4bb1-b285-20a12d8b9209
+let ŷ_t = @t(ŷ)
+
+	loss = norm(NN(input, params) - ŷ_t)
+	∇ = grad(loss)
+	params′ = deepcopy(params)
+	for (p, p′) in zip(params, params′)
+		p′.val .-= 1e-3 .* ∇[p]
+	end
+
+	plot(input', [NN(input, params).val; ŷ]'; label=["prediction" "training data"])
+	quiver!(input[1:4:end], NN(input, params).val[1:4:end]; quiver=(zero(input[1:4:end]), 3(NN(input, params′).val .- NN(input, params).val)[1:4:end]))
+end
+
 # ╔═╡ 86fa378b-815d-4c3d-9121-1338ee54f30f
 let
 	NN(x, (W1, W2, W3, b1, b2, b3)) = W3 * leaky_relu.(W2 * leaky_relu.(W1 * @t(x) .+ b1) .+ b2) .+ b3
+
+	_rand(s...) = randn(s...) / √prod(s)
+	W1, W2, W3 = _rand(32, 1), _rand(32, 32), _rand(1, 32)
+	b1, b2, b3 = _rand(32), _rand(32), _rand(1)
+	params = [@t(W1), @t(W2), @t(W3), @t(b1), @t(b2), @t(b3)]
 	p = @animate for i in 1:10000
 		loss = norm(NN(input, params) - @t(ŷ))
 		∇ = grad(loss)
@@ -345,52 +410,6 @@ begin
 		show(io, MIME("text/html"), get(x.d, x.x, @htl("")))
 	end
 	AbstractTrees.children(x::TTREE) = (TTREE(i, x.d) for i in children(x.x))
-end
-
-# ╔═╡ 1f1b384a-6588-45a5-9dd3-6de3face8bfb
-function ad_steps(x::Expr; color_fwd="red", color_bwd="green", font_size=".8em")
-	x = EX(x)
-	repr(x) = sprint(show, x; context=:compact=>true)
-	span_fwd = @htl "<span style='color: $color_fwd; font-size: $font_size'>"
-	span_bwd = @htl "<span style='color: $color_bwd; font-size: $font_size'>"
-
-    d1 = Dict(
-		let e = eval(i.x)
-			i => @htl "&ensp;$(span_fwd)$(repr(e isa Tracked ?  e.val : e))</span>"
-		end
-		for i in PostOrderDFS(x) if isempty(children(i))
-	)
-	
-	res = accumulate(Iterators.filter(x -> !isempty(children(x)), PostOrderDFS(x)); init=d1) do d,i
-		d = copy(d)
-		e = eval(i.x)
-		d[i] = @htl "&ensp;$(span_fwd)$(repr(e isa Tracked ?  e.val : e))</span>" 
-		d
-	end
-	
-	pushfirst!(res, d1)
-	
-	f = eval(x.x)
-	d = Dict{Any, Any}(f => 1)
-	let d1 = copy(res[end])
-		d1[x] = @htl "$(d1[x])&ensp;$(span_bwd)1</span>"
-		push!(res, d1)
-	end
-	for (x, e) in zip(PreOrderDFS.((f, x))...)
-		x.df === nothing && continue
-		dy = x.df(d[x])
-		for (yᵢ, dyᵢ, e) in zip(x.deps, dy, children(e))
-			d1 = copy(res[end])
-			if haskey(d, yᵢ)
-				d1[e] = @htl "$(get(d1, e, ""))$(span_bwd) + $(repr(dyᵢ))</span>"
-			else
-				d1[e] = @htl "$(get(d1, e, ""))&ensp;$(span_bwd)$(repr(dyᵢ))</span>"
-			end
-			push!(res, d1)
-			d[yᵢ] = get(d, yᵢ, 0) + dyᵢ
-		end
-	end
-	res
 end
 
 # ╔═╡ 1a154bb7-93a3-4973-8908-788db77ac294
@@ -1648,6 +1667,7 @@ version = "1.4.1+0"
 # ╟─98807f0d-f8a5-4fe0-9983-2b95290347d9
 # ╠═96286b65-1a22-4458-a399-46579248cce4
 # ╠═86aa821b-a373-4814-953e-535f3a33c002
+# ╠═49333dc7-b809-4bb1-b285-20a12d8b9209
 # ╟─85098c31-04a1-421c-b3f6-25fec9360588
 # ╠═7dca2c78-6faf-450a-8096-1c5b9f7f1295
 # ╠═b2622dc4-2fd3-4d80-8efd-a6a985a6b2e9
