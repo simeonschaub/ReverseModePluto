@@ -5,7 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ d5559dba-9fe4-11ec-3744-ebd1408e7dc4
-using LegibleLambdas, AbstractTrees, PlutoUI, HypertextLiteral, PlutoTest, LinearAlgebra, Plots
+using AbstractTrees, PlutoUI, HypertextLiteral, PlutoTest, LinearAlgebra, Plots
 
 # ╔═╡ 20571e1a-9687-4d42-98b3-b3bc0b207b3b
 md"## Let's write our own reverse-mode AD!"
@@ -35,38 +35,36 @@ end
 # ╔═╡ 885cd51d-895f-4996-a23b-780498b5b810
 md"""
 All overloads will do the operation (e.g. sum `x` and `y`), but also remember the pullback map and input variables for the reverse pass.
-
-`@λ` (from the *LegibleLambdas.jl* package) is just for the nicer printing, we could have replaced `@λ(Δ -> (Δ, Δ))` with `Δ -> (Δ, Δ)` if we didn't care about that
 """
 
 # ╔═╡ 13487e65-5e48-4a37-9bea-f262dd7b6d56
 function Base.:+(x::Tracked, y::Tracked)
-	Tracked(x.val + y.val, :+, @λ(Δ -> (Δ, Δ)), Tracked[x, y])
+	Tracked(x.val + y.val, :+, Δ -> (Δ, Δ), Tracked[x, y])
 end
 
 # ╔═╡ b0cc4665-eb45-48ea-9a33-5acf56d2a283
 function Base.:-(x::Tracked, y::Tracked)
-	Tracked(x.val - y.val, :-, @λ(Δ -> (Δ, -Δ)), Tracked[x, y])
+	Tracked(x.val - y.val, :-, Δ -> (Δ, -Δ), Tracked[x, y])
 end
 
 # ╔═╡ 73d638bf-30c1-4694-b3a8-4b29c5e3fa65
 function Base.:*(x::Tracked, y::Tracked)
-	Tracked(x.val * y.val, :*, @λ(Δ -> (Δ * y.val', x.val' * Δ)), Tracked[x, y])
+	Tracked(x.val * y.val, :*, Δ -> (Δ * y.val', x.val' * Δ), Tracked[x, y])
 end
 
 # ╔═╡ ac097299-0a31-474c-ab26-a4fb24bb9046
 function Base.:^(x::Tracked, n::Int)
-	Tracked(x.val^n, Symbol("^$n"), @λ(Δ -> (Δ * n * x.val^(n-1),)), Tracked[x,])
+	Tracked(x.val^n, Symbol("^$n"), Δ -> (Δ * n * x.val^(n-1),), Tracked[x,])
 end
 
 # ╔═╡ 2141849b-675e-406c-8df4-34b2706507af
 function Base.:/(x::Tracked, y::Tracked)
-	Tracked(x.val / y.val, :/, @λ(Δ -> (Δ / y.val, -Δ * x.val / y.val^2)), Tracked[x, y])
+	Tracked(x.val / y.val, :/, Δ -> (Δ / y.val, -Δ * x.val / y.val^2), Tracked[x, y])
 end
 
 # ╔═╡ 8ab0f55d-a393-4a8a-a48c-9ced26033f57
 function Base.sin(x::Tracked)
-	Tracked(sin(x.val), :sin, @λ(Δ -> (Δ * cos(x.val),)), Tracked[x,])
+	Tracked(sin(x.val), :sin, Δ -> (Δ * cos(x.val),), Tracked[x,])
 end
 
 # ╔═╡ 4bfc2f7d-a5b0-44c7-8bb6-f1b834c1cc51
@@ -199,18 +197,18 @@ We need some more overloads
 # ╔═╡ 520f280d-c78e-433b-a0a2-8ef05b04f7cc
 function Base.broadcasted(::typeof(tanh), x::Tracked)
 	res = tanh.(x.val)
-	Tracked(res, :tanh, @λ(Δ -> (Δ .* (1 .- res.^2),)), Tracked[x,])
+	Tracked(res, :tanh, Δ -> (Δ .* (1 .- res.^2),), Tracked[x,])
 end
 
 # ╔═╡ a5671f2f-48ca-4896-9428-147dc671d2b9
 function Base.broadcasted(::typeof(+), x::Tracked{<:VecOrMat}, y::Tracked{<:Vector})
-	Tracked(x.val .+ y.val, :.+, @λ(Δ -> (Δ, sum(Δ; dims=2))), Tracked[x, y])
+	Tracked(x.val .+ y.val, :.+, Δ -> (Δ, sum(Δ; dims=2)), Tracked[x, y])
 end
 
 # ╔═╡ e01114fa-a847-424a-931f-8f42e623109f
 function LinearAlgebra.norm(x::Tracked)
 	res = norm(x.val)
-	Tracked(res, :norm, @λ(Δ -> (Δ/res .* x.val,)), Tracked[x,])
+	Tracked(res, :norm, Δ -> (Δ/res .* x.val,), Tracked[x,])
 end
 
 # ╔═╡ e6ee1921-57aa-4194-b2eb-8e32fa4a6c44
@@ -254,7 +252,7 @@ leaky_relu(x) = x > 0 ? x : .1x
 
 # ╔═╡ b2622dc4-2fd3-4d80-8efd-a6a985a6b2e9
 function Base.broadcasted(::typeof(leaky_relu), x::Tracked)
-	Tracked(leaky_relu.(x.val), :tanh, @λ(Δ -> (map((x, Δ) -> x > 0 ? Δ : .1Δ, x.val, Δ),)), Tracked[x,])
+	Tracked(leaky_relu.(x.val), :tanh, Δ -> (map((x, Δ) -> x > 0 ? Δ : .1Δ, x.val, Δ),), Tracked[x,])
 end
 
 # ╔═╡ 0911a08a-4290-455b-9b26-0bf2862296da
@@ -585,7 +583,6 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
 HypertextLiteral = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
-LegibleLambdas = "f1f30506-32fe-5131-bd72-7c197988f9e5"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoTest = "cb4044da-4d16-4ffa-a6a3-8cad7f73ebdc"
@@ -594,7 +591,6 @@ PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 [compat]
 AbstractTrees = "~0.4.2"
 HypertextLiteral = "~0.9.4"
-LegibleLambdas = "~0.3.0"
 Plots = "~1.31.7"
 PlutoTest = "~0.2.2"
 PlutoUI = "~0.7.39"
@@ -606,7 +602,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.0"
 manifest_format = "2.0"
-project_hash = "4f205e06be03d8d7355b235f992d7e56546e4467"
+project_hash = "eceb496e896aa6e7e79fc43936b5726532da0604"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -961,12 +957,6 @@ deps = ["Formatting", "InteractiveUtils", "LaTeXStrings", "MacroTools", "Markdow
 git-tree-sha1 = "1a43be956d433b5d0321197150c2f94e16c0aaa0"
 uuid = "23fbe1c1-3f47-55db-b15f-69d7ec21a316"
 version = "0.15.16"
-
-[[deps.LegibleLambdas]]
-deps = ["MacroTools"]
-git-tree-sha1 = "7946db4829eb8de47c399f92c19790f9cc0bbd07"
-uuid = "f1f30506-32fe-5131-bd72-7c197988f9e5"
-version = "0.3.0"
 
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
