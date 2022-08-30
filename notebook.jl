@@ -7,40 +7,155 @@ using InteractiveUtils
 # ╔═╡ d5559dba-9fe4-11ec-3744-ebd1408e7dc4
 using AbstractTrees, PlutoUI, HypertextLiteral, PlutoTest, LinearAlgebra, Plots
 
+# ╔═╡ 4da7a594-aec5-4c8d-ab20-6913ed6ff8ac
+TableOfContents(title="📚 Table of Contents", indent=true, depth=4, aside=true)
+
+# ╔═╡ 1b768306-0e0e-414d-a501-5c62a2db720f
+md"## Computations as Trees"
+
+# ╔═╡ 6733267e-1251-49a7-86a0-ff45ba408205
+md"### Tracking variables"
+
+# ╔═╡ 17f9e2c0-aa70-4d4e-ba42-51782df43785
+md"### Computational Tree (Forward Pass)"
+
+# ╔═╡ 7299bfea-e23e-4993-bebd-9d8762427294
+md"### Pretty Viz: Forward Pass + Reverse Mode Diff"
+
+# ╔═╡ be693f92-de60-4b43-82b3-ee6cceea310a
+md"""
+
+$\frac{\partial}{\partial x} (2xy + (x-1)^2) = 2y + 2(x-1)$
+$\frac{\partial}{\partial y} (2xy + (x-1)^2) = 2x$
+
+If x = 3 and y = 5, then these evaluate to  14 and 6.
+"""
+
 # ╔═╡ 20571e1a-9687-4d42-98b3-b3bc0b207b3b
-md"## Let's write our own reverse-mode AD!"
+md"## Implementation in Code"
 
 # ╔═╡ 5e02b2c0-10cf-4746-840d-7017648f89f8
 md"""
-We will use Julia's dispatch system for simplicity. This means we create a type `Tracked` for keeping track of our input variables and everything we'll need to calculate the gradient later.
+Besides the mathematics of reverse mode differentiation, there are many interesting computer science issues regarding the implementation of reverse diff.  Probably the jury is still out which is best.
+
+The implementation below is based on Julia's dispatch system.
+This means we create a type `Tracked` for keeping track of our input variables and everything we'll need to calculate later.
+
+The other main approach (not illustrated here) is source to source translation of code. In Julia the zygote package translates at the high level, while the increasingly popular Enzyme package translates at the lower level.
 """
+
+# ╔═╡ d1312080-272c-4bd5-bcfe-bf47f8320961
+md"### The Tracked Data Structure"
 
 # ╔═╡ 99b6ab91-a022-449c-988c-0e5c5719c910
 begin
+
 	struct Tracked{T} <: Number
-		# The numerical result when doing the forward pass
 		val::T
 		name::Symbol
-		# The pullback map for the reverse pass
 		df
-		# All the other variables this variable directly depends on
 		deps::Vector{Tracked}
 	end
+
+	# the two argument version as in Tracked{Int}(3,:x)
 	Tracked{T}(x, name=gensym()) where {T} = Tracked{T}(x, name, nothing, Tracked[])
+
+	## The above is typical Julia, the below shows up often when you 
+	## define a new number type and you want ordinary numbers to work together
+	## with your newly defined numbers.
+	## This is similar to when in mathematics, strictly speaking integers
+	## are separate from the reals, but we all treat integers as embedded
+	## in the reals.
+
+	# Converting a Tracked variable, converts like the number
 	Base.convert(T::Type{Tracked{S}}, x::Tracked) where {S} = T(convert(S, x.val), x.name, x.df, x.deps)
+
 	# This tells Julia to convert any number added to a `Tracked` to a `Tracked` first
 	Base.promote_rule(::Type{Tracked{S}}, ::Type{T}) where {S<:Number, T<:Number} = Tracked{promote_type(S, T)}
+
+	# All this is just for nicer printing
+	function Base.show(io::IO, x::Tracked)
+		if x.df === nothing
+			print(io, Base.isgensym(x.name) ? x.val : "$(x.val)=$(x.name)")
+		else
+			#print(io, "⋅Tracked(")
+			print(io,"[")
+			print(io, x.name)
+			print(io,"]")
+			#print(io, ", ")
+			 print(io," → ")
+			show(io, x.val)
+			#print(io, ")")
+		end
+	end
+	function Base.show(io::IO, x::Tracked{<:AbstractArray})
+		io = IOContext(io, :compact=>true)
+		print(io, Base.isgensym(x.name) ? x.val : string(x.name))
+	end
+	Base.show(io::IO, ::MIME"text/plain", x::Tracked) = print_tree(io, x)
+
+	Base.:(==)(x::Tracked, y::Tracked) = x === y
 end
+
+# ╔═╡ 0b5e6560-81fd-4182-bba5-aca702fb3048
+begin
+   # The second argument of Tracked is a symbol only used for printing
+   x = Tracked{Int}(3, :x)
+   y = Tracked{Int}(5, :y)
+   u = Tracked{Int}(2, :u)
+end
+
+# ╔═╡ 0d006e4d-72e3-42ab-beb3-e5304a4d9ba9
+x
+
+# ╔═╡ 8919faec-753d-41d0-b0a8-c84c025b2919
+xfloat = convert( Tracked{Float64}, x)
+
+# ╔═╡ be28f764-a415-46ed-a503-68e8d831f8a8
+(aa,bb) = (promote(x,2.5)) # promotes x to be a float and also y to be a Tracked
+
+# ╔═╡ a0c0f48d-e0b0-4f45-8e0e-d9ab5743958b
+Dump(aa)
+
+# ╔═╡ 814786be-a760-4023-a614-83e727681075
+Dump(bb)
+
+# ╔═╡ 2ba83769-89b4-4ba0-8726-9210f394b4e7
+md"### Operations on Tracked"
 
 # ╔═╡ 885cd51d-895f-4996-a23b-780498b5b810
 md"""
 All overloads will do the operation (e.g. sum `x` and `y`), but also remember the pullback map and input variables for the reverse pass.
 """
 
+# ╔═╡ 4813e57f-557a-4179-afd2-7925687b3d35
+## Simeon write your way too
+# These operations are
+
+# d(x/y)= (y dx - x dy)/y^2
+# ∇(x/y) = [1/y; -x/y^2] # Notice that the Δ -> (?,?) is just the gradient
+
+# ╔═╡ ea94bdf9-b0b1-42ad-ba44-aaba73ed1192
+md"""
+Let's look at our example from above, $z = x^2+y$.
+We'll introduce an intermediate variable $u = x^2$ so we can write $z$ as $u + y$.
+
+We will first start with $1 \cdot dz$. The one here represents the fact that $\frac{\partial z}{\partial z} = 1$.
+
+We then want to *pull* that *back* until we get something in terms of $dx$ and $dy$, so we then get the derivatives wrt $x$ and $y$
+
+The pullback map for $+$ will first map $dz$ to $d(u + y) = du + dy$ and then we can use the pullback map for ^ to expand $du$ to $2x \cdot dx$.
+
+Using that recursive method we end up with $dz = 2x \cdot dx + dy$, which is exactly what we'd get if we did this by hand. This tells us that $\frac{\partial z}{\partial x} = 2x$ and $\frac{\partial z}{\partial y} = y$.
+"""
+
 # ╔═╡ 13487e65-5e48-4a37-9bea-f262dd7b6d56
 function Base.:+(x::Tracked, y::Tracked)
 	Tracked(x.val + y.val, :+, Δ -> (Δ, Δ), Tracked[x, y])
 end
+
+# ╔═╡ c9d70049-4793-41db-9075-e9e73e926c1a
+x+y
 
 # ╔═╡ b0cc4665-eb45-48ea-9a33-5acf56d2a283
 function Base.:-(x::Tracked, y::Tracked)
@@ -52,10 +167,46 @@ function Base.:*(x::Tracked, y::Tracked)
 	Tracked(x.val * y.val, :*, Δ -> (Δ * y.val', x.val' * Δ), Tracked[x, y])
 end
 
+# ╔═╡ 95ab6c83-0757-40b3-a116-6d872a074f69
+x*y
+
+# ╔═╡ db4f871a-3ca1-4bd3-a2c5-da7d6f599281
+(x*y).val
+
+# ╔═╡ 29360c2a-c47b-48a3-b225-248eb3ec8a42
+(x*y).name
+
+# ╔═╡ b47754ac-cb17-4ea3-a97d-20371fd341a5
+((x*y).df)(1) # For reference
+
+# ╔═╡ bb75e790-a628-4821-b7b1-11cd34a73d38
+(x*y).deps
+
 # ╔═╡ ac097299-0a31-474c-ab26-a4fb24bb9046
 function Base.:^(x::Tracked, n::Int)
 	Tracked(x.val^n, Symbol("^$n"), Δ -> (Δ * n * x.val^(n-1),), Tracked[x,])
 end
+
+# ╔═╡ aa99b123-7164-4ed7-833f-b99b19118a0d
+x^2+y
+
+# ╔═╡ 0d2a3187-46f1-4705-bb3e-ecf74e34840d
+z = (2x*y + (x-1)^2)
+
+# ╔═╡ 61513f88-c126-43ab-9515-85a2c8a472bf
+(x^2+y).deps
+
+# ╔═╡ 2c3f3103-9ccb-446e-a289-87bbd0a1b97b
+(x^2+y).deps[2]
+
+# ╔═╡ 795c510e-6280-42d9-8820-290ca07be88d
+((x^2+y).deps[2]).deps
+
+# ╔═╡ e450329b-46ee-4f53-b6f0-891d6596938c
+x^2+y
+
+# ╔═╡ d48b9f23-b1b8-43f8-a05d-2234b69bf1f0
+(2x*y + (x-1)^2)
 
 # ╔═╡ 2141849b-675e-406c-8df4-34b2706507af
 function Base.:/(x::Tracked, y::Tracked)
@@ -75,40 +226,6 @@ md"""
 # ╔═╡ 2188a663-5a85-4ce4-bc8d-20383481e59b
 AbstractTrees.children(x::Tracked) = x.deps
 
-# ╔═╡ 00da514b-c6be-4d95-a0de-aed486615f3a
-md"""
-Let's also overload `show` for nicer output:
-"""
-
-# ╔═╡ 7429ffcb-dcee-4090-972e-ffde8393a37a
-begin
-	# All this is just for nicer printing
-	function Base.show(io::IO, x::Tracked)
-		if x.df === nothing
-			print(io, Base.isgensym(x.name) ? x.val : "$(x.name)=$(x.val)")
-		else
-			print(io, "Tracked(")
-			show(io, x.val)
-			print(io, ", ")
-			print(io, x.name)
-			print(io, ")")
-		end
-	end
-	Base.show(io::IO, ::MIME"text/plain", x::Tracked) = print_tree(io, x)
-	Base.:(==)(x::Tracked, y::Tracked) = x === y
-end
-
-# ╔═╡ 727b2de3-1ee7-4f14-897f-46d263fa12ee
-md"""
-Create some variables we want to eventually differentiate with respect to.
-"""
-
-# ╔═╡ 0b5e6560-81fd-4182-bba5-aca702fb3048
-begin
-   x = Tracked{Int}(3, :x)
-   y = Tracked{Int}(5, :y)
-end
-
 # ╔═╡ ccafd0b9-95aa-4e58-8afc-26cd3ee61cc9
 md"""
 Straight away we get the primal result of our calculation:
@@ -121,9 +238,6 @@ Straight away we get the primal result of our calculation:
 md"""
 To also get the gradient, we'll use `PreOrderDFS` to traverse the tree we just created from the top down.
 """
-
-# ╔═╡ f0814e23-6f75-4db8-b277-d21d4926f876
-z = (2x*y + (x-1)^2)
 
 # ╔═╡ e52aa672-69a9-419b-a992-e7a3d1364fb6
 # `PreOrderDFS` traverses this tree from the top down
@@ -263,12 +377,6 @@ md"""
 ---
 ### Helper Functions
 """
-
-# ╔═╡ e5d3f23e-3295-4d9b-a9aa-17270e5ca67a
-function Base.show(io::IO, x::Tracked{<:AbstractArray})
-	io = IOContext(io, :compact=>true)
-		print(io, Base.isgensym(x.name) ? x.val : string(x.name))
-end
 
 # ╔═╡ d82adc20-4c8c-4f2c-9839-d03ad7e7f581
 begin
@@ -546,7 +654,22 @@ end
 
 # ╔═╡ 27b39d7d-fc08-4ccc-aea4-b64f8a4f5726
 #@ad_steps 3y*x + 2(x-1)*x
-@ad_steps x^3 + y + sin(👽)
+@ad_steps (2x*y + (x-1)^2)  # type the steps for the macro
+
+# ╔═╡ ec723b90-1c8b-4a87-8a86-fe17d6e85f22
+@ad_steps (x+y)
+
+# ╔═╡ 0d186a1b-eb89-4be8-a237-e5a9608f4a30
+@ad_steps (x*y)
+
+# ╔═╡ db3389c0-cb00-404c-81a8-8c4ccdab22f4
+@ad_steps ((x*y)*u)
+
+# ╔═╡ 8b486bd8-25a1-4895-99c8-0541c9e3c8b0
+@ad_steps (x/y)
+
+# ╔═╡ 2eb6af9c-9ac7-4b64-93fb-c5a2f037d303
+@ad_steps y^2
 
 # ╔═╡ f6ce8448-d9ce-4453-9e47-dc6443d50f55
 s1 = html"""
@@ -853,9 +976,9 @@ version = "1.0.2"
 
 [[deps.HTTP]]
 deps = ["Base64", "CodecZlib", "Dates", "IniFile", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
-git-tree-sha1 = "303a225c6fbd7647aae030730d48239552e4d006"
+git-tree-sha1 = "bf7fcabde6565fd8226d8a4c31bc8bb25fdd7f1d"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
-version = "1.3.1"
+version = "1.3.0"
 
 [[deps.HarfBuzz_jll]]
 deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "Graphite2_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg"]
@@ -1609,10 +1732,44 @@ version = "1.4.1+0"
 
 # ╔═╡ Cell order:
 # ╠═d5559dba-9fe4-11ec-3744-ebd1408e7dc4
+# ╠═4da7a594-aec5-4c8d-ab20-6913ed6ff8ac
+# ╟─1b768306-0e0e-414d-a501-5c62a2db720f
+# ╟─6733267e-1251-49a7-86a0-ff45ba408205
+# ╠═0b5e6560-81fd-4182-bba5-aca702fb3048
+# ╟─17f9e2c0-aa70-4d4e-ba42-51782df43785
+# ╠═c9d70049-4793-41db-9075-e9e73e926c1a
+# ╠═aa99b123-7164-4ed7-833f-b99b19118a0d
+# ╠═0d2a3187-46f1-4705-bb3e-ecf74e34840d
+# ╠═61513f88-c126-43ab-9515-85a2c8a472bf
+# ╠═2c3f3103-9ccb-446e-a289-87bbd0a1b97b
+# ╠═795c510e-6280-42d9-8820-290ca07be88d
+# ╠═e450329b-46ee-4f53-b6f0-891d6596938c
+# ╟─7299bfea-e23e-4993-bebd-9d8762427294
+# ╠═d48b9f23-b1b8-43f8-a05d-2234b69bf1f0
+# ╟─be693f92-de60-4b43-82b3-ee6cceea310a
+# ╠═27b39d7d-fc08-4ccc-aea4-b64f8a4f5726
+# ╠═ec723b90-1c8b-4a87-8a86-fe17d6e85f22
+# ╠═0d186a1b-eb89-4be8-a237-e5a9608f4a30
+# ╠═db3389c0-cb00-404c-81a8-8c4ccdab22f4
+# ╠═8b486bd8-25a1-4895-99c8-0541c9e3c8b0
 # ╟─20571e1a-9687-4d42-98b3-b3bc0b207b3b
 # ╟─5e02b2c0-10cf-4746-840d-7017648f89f8
+# ╠═95ab6c83-0757-40b3-a116-6d872a074f69
+# ╠═db4f871a-3ca1-4bd3-a2c5-da7d6f599281
+# ╠═29360c2a-c47b-48a3-b225-248eb3ec8a42
+# ╠═b47754ac-cb17-4ea3-a97d-20371fd341a5
+# ╠═bb75e790-a628-4821-b7b1-11cd34a73d38
+# ╟─d1312080-272c-4bd5-bcfe-bf47f8320961
 # ╠═99b6ab91-a022-449c-988c-0e5c5719c910
+# ╠═0d006e4d-72e3-42ab-beb3-e5304a4d9ba9
+# ╠═8919faec-753d-41d0-b0a8-c84c025b2919
+# ╠═be28f764-a415-46ed-a503-68e8d831f8a8
+# ╠═a0c0f48d-e0b0-4f45-8e0e-d9ab5743958b
+# ╠═814786be-a760-4023-a614-83e727681075
+# ╟─2ba83769-89b4-4ba0-8726-9210f394b4e7
 # ╟─885cd51d-895f-4996-a23b-780498b5b810
+# ╠═4813e57f-557a-4179-afd2-7925687b3d35
+# ╟─ea94bdf9-b0b1-42ad-ba44-aaba73ed1192
 # ╠═13487e65-5e48-4a37-9bea-f262dd7b6d56
 # ╠═b0cc4665-eb45-48ea-9a33-5acf56d2a283
 # ╠═73d638bf-30c1-4694-b3a8-4b29c5e3fa65
@@ -1621,14 +1778,9 @@ version = "1.4.1+0"
 # ╠═8ab0f55d-a393-4a8a-a48c-9ced26033f57
 # ╟─4bfc2f7d-a5b0-44c7-8bb6-f1b834c1cc51
 # ╠═2188a663-5a85-4ce4-bc8d-20383481e59b
-# ╟─00da514b-c6be-4d95-a0de-aed486615f3a
-# ╠═7429ffcb-dcee-4090-972e-ffde8393a37a
-# ╟─727b2de3-1ee7-4f14-897f-46d263fa12ee
-# ╠═0b5e6560-81fd-4182-bba5-aca702fb3048
 # ╟─ccafd0b9-95aa-4e58-8afc-26cd3ee61cc9
 # ╠═81eb8a2d-a3a9-45af-a5a5-b96aefd48712
 # ╟─01eacbd4-ef37-4524-aecc-2ef9a1044cf8
-# ╠═f0814e23-6f75-4db8-b277-d21d4926f876
 # ╠═e52aa672-69a9-419b-a992-e7a3d1364fb6
 # ╟─d5565717-239b-41ab-b311-d59b383130ed
 # ╠═99a3507b-ca03-429f-acde-e2d1ebb32054
@@ -1640,8 +1792,8 @@ version = "1.4.1+0"
 # ╟─e55dfad2-db50-459f-ab54-fa7637fc3638
 # ╠═d9304d8d-9a34-46f2-908d-42d5cc5f5c5f
 # ╠═a6c2d3a2-326a-41dd-864d-aa3662466222
-# ╠═27b39d7d-fc08-4ccc-aea4-b64f8a4f5726
 # ╟─bcff2aa8-2387-44c7-a28f-39cd505a7adf
+# ╠═2eb6af9c-9ac7-4b64-93fb-c5a2f037d303
 # ╠═79f71f9d-b491-4a2c-85a4-29ae8da4f312
 # ╟─53ae4070-8818-4d21-8648-19df9319918a
 # ╟─8a70e835-dae6-4727-8204-95c87d5c23da
@@ -1664,7 +1816,6 @@ version = "1.4.1+0"
 # ╠═0911a08a-4290-455b-9b26-0bf2862296da
 # ╠═86fa378b-815d-4c3d-9121-1338ee54f30f
 # ╟─0b094198-cf44-41d7-a8dc-fd8fd0716bb4
-# ╠═e5d3f23e-3295-4d9b-a9aa-17270e5ca67a
 # ╠═1f1b384a-6588-45a5-9dd3-6de3face8bfb
 # ╠═d82adc20-4c8c-4f2c-9839-d03ad7e7f581
 # ╠═8110f306-a7bb-43a2-bb36-6182c59b4b2e
