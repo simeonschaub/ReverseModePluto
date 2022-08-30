@@ -135,6 +135,20 @@ All overloads will do the operation (e.g. sum `x` and `y`), but also remember th
 # d(x/y)= (y dx - x dy)/y^2
 # ∇(x/y) = [1/y; -x/y^2] # Notice that the Δ -> (?,?) is just the gradient
 
+# ╔═╡ ea94bdf9-b0b1-42ad-ba44-aaba73ed1192
+md"""
+Let's look at our example from above, $z = x^2+y$.
+We'll introduce an intermediate variable $u = x^2$ so we can write $z$ as $u + y$.
+
+We will first start with $1 \cdot dz$. The one here represents the fact that $\frac{\partial z}{\partial z} = 1$.
+
+We then want to *pull* that *back* until we get something in terms of $dx$ and $dy$, so we then get the derivatives wrt $x$ and $y$
+
+The pullback map for $+$ will first map $dz$ to $d(u + y) = du + dy$ and then we can use the pullback map for ^ to expand $du$ to $2x \cdot dx$.
+
+Using that recursive method we end up with $dz = 2x \cdot dx + dy$, which is exactly what we'd get if we did this by hand. This tells us that $\frac{\partial z}{\partial x} = 2x$ and $\frac{\partial z}{\partial y} = y$.
+"""
+
 # ╔═╡ 13487e65-5e48-4a37-9bea-f262dd7b6d56
 function Base.:+(x::Tracked, y::Tracked)
 	Tracked(x.val + y.val, :+, Δ -> (Δ, Δ), Tracked[x, y])
@@ -1732,7 +1746,7 @@ version = "1.4.1+0"
 # ╠═e450329b-46ee-4f53-b6f0-891d6596938c
 # ╟─7299bfea-e23e-4993-bebd-9d8762427294
 # ╠═d48b9f23-b1b8-43f8-a05d-2234b69bf1f0
-# ╠═be693f92-de60-4b43-82b3-ee6cceea310a
+# ╟─be693f92-de60-4b43-82b3-ee6cceea310a
 # ╠═27b39d7d-fc08-4ccc-aea4-b64f8a4f5726
 # ╠═ec723b90-1c8b-4a87-8a86-fe17d6e85f22
 # ╠═0d186a1b-eb89-4be8-a237-e5a9608f4a30
@@ -1755,6 +1769,7 @@ version = "1.4.1+0"
 # ╟─2ba83769-89b4-4ba0-8726-9210f394b4e7
 # ╟─885cd51d-895f-4996-a23b-780498b5b810
 # ╠═4813e57f-557a-4179-afd2-7925687b3d35
+# ╟─ea94bdf9-b0b1-42ad-ba44-aaba73ed1192
 # ╠═13487e65-5e48-4a37-9bea-f262dd7b6d56
 # ╠═b0cc4665-eb45-48ea-9a33-5acf56d2a283
 # ╠═73d638bf-30c1-4694-b3a8-4b29c5e3fa65
