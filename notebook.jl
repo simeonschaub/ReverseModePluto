@@ -72,6 +72,29 @@ begin
 
 	# This tells Julia to convert any number added to a `Tracked` to a `Tracked` first
 	Base.promote_rule(::Type{Tracked{S}}, ::Type{T}) where {S<:Number, T<:Number} = Tracked{promote_type(S, T)}
+
+	# All this is just for nicer printing
+	function Base.show(io::IO, x::Tracked)
+		if x.df === nothing
+			print(io, Base.isgensym(x.name) ? x.val : "$(x.val)=$(x.name)")
+		else
+			#print(io, "⋅Tracked(")
+			print(io,"[")
+			print(io, x.name)
+			print(io,"]")
+			#print(io, ", ")
+			 print(io," → ")
+			show(io, x.val)
+			#print(io, ")")
+		end
+	end
+	function Base.show(io::IO, x::Tracked{<:AbstractArray})
+		io = IOContext(io, :compact=>true)
+		print(io, Base.isgensym(x.name) ? x.val : string(x.name))
+	end
+	Base.show(io::IO, ::MIME"text/plain", x::Tracked) = print_tree(io, x)
+
+	Base.:(==)(x::Tracked, y::Tracked) = x === y
 end
 
 # ╔═╡ 0b5e6560-81fd-4182-bba5-aca702fb3048
@@ -188,37 +211,6 @@ md"""
 
 # ╔═╡ 2188a663-5a85-4ce4-bc8d-20383481e59b
 AbstractTrees.children(x::Tracked) = x.deps
-
-# ╔═╡ 00da514b-c6be-4d95-a0de-aed486615f3a
-md"""
-Let's also overload `show` for nicer output:
-"""
-
-# ╔═╡ 7429ffcb-dcee-4090-972e-ffde8393a37a
-begin
-	# All this is just for nicer printing
-	function Base.show(io::IO, x::Tracked)
-		if x.df === nothing
-			print(io, Base.isgensym(x.name) ? x.val : "$(x.val)=$(x.name)")
-		else
-			#print(io, "⋅Tracked(")
-			print(io,"[")
-			print(io, x.name)
-			print(io,"]")
-			#print(io, ", ")
-			 print(io," → ")
-			show(io, x.val)
-			#print(io, ")")
-		end
-	end
-	Base.show(io::IO, ::MIME"text/plain", x::Tracked) = print_tree(io, x)
-	Base.:(==)(x::Tracked, y::Tracked) = x === y
-end
-
-# ╔═╡ 727b2de3-1ee7-4f14-897f-46d263fa12ee
-md"""
-Create some variables we want to eventually differentiate with respect to.
-"""
 
 # ╔═╡ ccafd0b9-95aa-4e58-8afc-26cd3ee61cc9
 md"""
@@ -371,12 +363,6 @@ md"""
 ---
 ### Helper Functions
 """
-
-# ╔═╡ e5d3f23e-3295-4d9b-a9aa-17270e5ca67a
-function Base.show(io::IO, x::Tracked{<:AbstractArray})
-	io = IOContext(io, :compact=>true)
-		print(io, Base.isgensym(x.name) ? x.val : string(x.name))
-end
 
 # ╔═╡ d82adc20-4c8c-4f2c-9839-d03ad7e7f581
 begin
@@ -668,7 +654,6 @@ end
 # ╔═╡ 8b486bd8-25a1-4895-99c8-0541c9e3c8b0
 @ad_steps (x/y)
 
-
 # ╔═╡ 2eb6af9c-9ac7-4b64-93fb-c5a2f037d303
 @ad_steps y^2
 
@@ -724,7 +709,7 @@ PlutoUI = "~0.7.39"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.8.0-rc4"
+julia_version = "1.8.0"
 manifest_format = "2.0"
 project_hash = "eceb496e896aa6e7e79fc43936b5726532da0604"
 
@@ -1737,7 +1722,7 @@ version = "1.4.1+0"
 # ╟─1b768306-0e0e-414d-a501-5c62a2db720f
 # ╟─6733267e-1251-49a7-86a0-ff45ba408205
 # ╠═0b5e6560-81fd-4182-bba5-aca702fb3048
-# ╠═17f9e2c0-aa70-4d4e-ba42-51782df43785
+# ╟─17f9e2c0-aa70-4d4e-ba42-51782df43785
 # ╠═c9d70049-4793-41db-9075-e9e73e926c1a
 # ╠═aa99b123-7164-4ed7-833f-b99b19118a0d
 # ╠═0d2a3187-46f1-4705-bb3e-ecf74e34840d
@@ -1760,14 +1745,14 @@ version = "1.4.1+0"
 # ╠═29360c2a-c47b-48a3-b225-248eb3ec8a42
 # ╠═b47754ac-cb17-4ea3-a97d-20371fd341a5
 # ╠═bb75e790-a628-4821-b7b1-11cd34a73d38
-# ╠═d1312080-272c-4bd5-bcfe-bf47f8320961
+# ╟─d1312080-272c-4bd5-bcfe-bf47f8320961
 # ╠═99b6ab91-a022-449c-988c-0e5c5719c910
 # ╠═0d006e4d-72e3-42ab-beb3-e5304a4d9ba9
 # ╠═8919faec-753d-41d0-b0a8-c84c025b2919
 # ╠═be28f764-a415-46ed-a503-68e8d831f8a8
 # ╠═a0c0f48d-e0b0-4f45-8e0e-d9ab5743958b
 # ╠═814786be-a760-4023-a614-83e727681075
-# ╠═2ba83769-89b4-4ba0-8726-9210f394b4e7
+# ╟─2ba83769-89b4-4ba0-8726-9210f394b4e7
 # ╟─885cd51d-895f-4996-a23b-780498b5b810
 # ╠═4813e57f-557a-4179-afd2-7925687b3d35
 # ╠═13487e65-5e48-4a37-9bea-f262dd7b6d56
@@ -1778,9 +1763,6 @@ version = "1.4.1+0"
 # ╠═8ab0f55d-a393-4a8a-a48c-9ced26033f57
 # ╟─4bfc2f7d-a5b0-44c7-8bb6-f1b834c1cc51
 # ╠═2188a663-5a85-4ce4-bc8d-20383481e59b
-# ╟─00da514b-c6be-4d95-a0de-aed486615f3a
-# ╠═7429ffcb-dcee-4090-972e-ffde8393a37a
-# ╟─727b2de3-1ee7-4f14-897f-46d263fa12ee
 # ╟─ccafd0b9-95aa-4e58-8afc-26cd3ee61cc9
 # ╠═81eb8a2d-a3a9-45af-a5a5-b96aefd48712
 # ╟─01eacbd4-ef37-4524-aecc-2ef9a1044cf8
@@ -1819,7 +1801,6 @@ version = "1.4.1+0"
 # ╠═0911a08a-4290-455b-9b26-0bf2862296da
 # ╠═86fa378b-815d-4c3d-9121-1338ee54f30f
 # ╟─0b094198-cf44-41d7-a8dc-fd8fd0716bb4
-# ╠═e5d3f23e-3295-4d9b-a9aa-17270e5ca67a
 # ╠═1f1b384a-6588-45a5-9dd3-6de3face8bfb
 # ╠═d82adc20-4c8c-4f2c-9839-d03ad7e7f581
 # ╠═8110f306-a7bb-43a2-bb36-6182c59b4b2e
